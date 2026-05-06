@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Video Summarizer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-mark">AI</div>
+      <div class="header-text">
+        <h1 class="header-title">Video Summarizer</h1>
+        <p class="header-sub">Upload a video. Choose your summary type.</p>
+      </div>
+      <!-- Nav tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" id="tabSummarize" onclick="switchTab('summarize')">Summarize</button>
+        <button class="nav-tab" id="tabTrain" onclick="switchTab('train')">Training</button>
+      </nav>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════ SUMMARIZE TAB -->
+    <div id="viewSummarize">
+
+      <div class="card upload-card">
+        <label class="drop-zone" id="dropZone" for="videoInput">
+          <input type="file" id="videoInput" accept="video/mp4" hidden />
+          <div class="dz-body">
+            <div class="dz-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <p class="dz-title">Drop your video here</p>
+            <p class="dz-sub">or click to browse &mdash; MP4 only, max 500 MB</p>
+          </div>
+          <div class="file-info" id="fileInfo" hidden>
+            <div class="file-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+            </div>
+            <div class="file-details">
+              <span class="file-name" id="fileName"></span>
+              <span class="file-meta" id="fileMeta"></span>
+            </div>
+            <button class="file-clear" id="clearBtn" type="button">&#x2715;</button>
+          </div>
+        </label>
+
+        <div class="actions">
+          <button class="btn btn-video" id="videoBtn" type="button" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7"/>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            </svg>
+            Video Summary
+          </button>
+          <button class="btn btn-text" id="textBtn" type="button" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="17" y1="10" x2="3" y2="10"/>
+              <line x1="21" y1="6" x2="3" y2="6"/>
+              <line x1="21" y1="14" x2="3" y2="14"/>
+              <line x1="17" y1="18" x2="3" y2="18"/>
+            </svg>
+            Text Summary
+          </button>
+        </div>
+
+        <div class="status-bar">
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-msg" id="statusMsg">Idle</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="resultArea" class="result-area hidden">
+
+        <div id="videoResult" class="card result-card hidden">
+          <div class="result-header">
+            <span class="result-tag tag-video">Video</span>
+            <h2 class="result-title">Video Summary</h2>
+          </div>
+          <video id="videoPlayer" class="video-player" controls></video>
+          <button class="btn btn-download" id="downloadBtn" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Summary
+          </button>
+        </div>
+
+        <div id="textResult" class="card result-card hidden">
+          <div class="result-header">
+            <span class="result-tag tag-text">Text</span>
+            <h2 class="result-title" id="schemaTitle"></h2>
+          </div>
+          <section class="schema-section">
+            <div class="schema-label">Summary</div>
+            <p class="schema-summary" id="schemaSummary"></p>
+          </section>
+          <section class="schema-section">
+            <div class="schema-label">OODA Analysis</div>
+            <div class="ooda-grid">
+              <div class="ooda-cell"><div class="ooda-key">Observe</div><div class="ooda-val" id="oodaObserve"></div></div>
+              <div class="ooda-cell"><div class="ooda-key">Orient</div><div class="ooda-val" id="oodaOrient"></div></div>
+              <div class="ooda-cell"><div class="ooda-key">Decide</div><div class="ooda-val" id="oodaDecide"></div></div>
+              <div class="ooda-cell"><div class="ooda-key">Act</div><div class="ooda-val" id="oodaAct"></div></div>
+            </div>
+          </section>
+          <section class="schema-section">
+            <div class="schema-label">Key Moments</div>
+            <div class="moments-list" id="momentsList"></div>
+          </section>
+          <section class="schema-section">
+            <div class="schema-label">Stats</div>
+            <div class="stats-row" id="statsRow"></div>
+          </section>
+          <details class="json-details">
+            <summary>Raw JSON Schema</summary>
+            <pre class="json-pre" id="jsonRaw"></pre>
+          </details>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ TRAINING TAB -->
+    <div id="viewTrain" class="hidden">
+
+      <!-- Step 1 -->
+      <div class="card train-card">
+        <div class="train-step-header">
+          <div class="step-badge">Step 1</div>
+          <div>
+            <div class="train-step-title">Build Dataset</div>
+            <div class="train-step-sub">Extract ResNet18 features from 7,010 MSR-VTT videos and build vocabulary</div>
+          </div>
+          <div class="train-step-actions">
+            <button class="btn btn-start" id="startDatasetBtn" onclick="startPhase('dataset')">Run</button>
+            <button class="btn btn-stop hidden" id="stopDatasetBtn" onclick="stopJob()">Stop</button>
+          </div>
+        </div>
+
+        <div class="train-progress-wrap" id="datasetProgress">
+          <div class="train-progress-meta">
+            <span id="datasetProgressLabel">Waiting…</span>
+            <span id="datasetProgressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill fill-blue" id="datasetFill" style="width:0%"></div>
+          </div>
+          <div class="train-meta-row">
+            <span class="meta-chip" id="datasetSpeed"></span>
+            <span class="meta-chip" id="datasetEta"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="card train-card">
+        <div class="train-step-header">
+          <div class="step-badge step-badge-purple">Step 2</div>
+          <div>
+            <div class="train-step-title">Train Caption Model</div>
+            <div class="train-step-sub">BiGRU encoder + Bahdanau attention + LSTM decoder — 30 epochs</div>
+          </div>
+          <div class="train-step-actions">
+            <button class="btn btn-start btn-purple" id="startModelBtn" onclick="startPhase('model')">Run</button>
+            <button class="btn btn-stop hidden" id="stopModelBtn" onclick="stopJob()">Stop</button>
+          </div>
+        </div>
+
+        <div class="train-progress-wrap" id="modelProgress">
+          <div class="train-progress-meta">
+            <span id="modelProgressLabel">Waiting…</span>
+            <span id="modelProgressPct">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill fill-purple" id="modelFill" style="width:0%"></div>
+          </div>
+
+          <!-- Live metrics -->
+          <div class="metrics-row" id="metricsRow">
+            <div class="metric-box">
+              <div class="metric-val" id="mTrainLoss">—</div>
+              <div class="metric-label">Train Loss</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="mValLoss">—</div>
+              <div class="metric-label">Val Loss</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="mBleu">—</div>
+              <div class="metric-label">BLEU-4</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="mEpoch">—</div>
+              <div class="metric-label">Epoch</div>
+            </div>
+          </div>
+
+          <!-- Loss chart -->
+          <div class="chart-wrap" id="chartWrap">
+            <div class="chart-label">Loss over epochs</div>
+            <canvas id="lossChart" width="620" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log console -->
+      <div class="card train-card">
+        <div class="log-header">
+          <span class="schema-label" style="margin:0">Console</span>
+          <div style="display:flex;gap:8px">
+            <button class="log-clear-btn" onclick="resetJob()" style="color:#fca5a5;border-color:rgba(239,68,68,0.3)">Reset State</button>
+            <button class="log-clear-btn" onclick="document.getElementById('logBox').innerHTML=''">Clear</button>
+          </div>
+        </div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+    </div>
+
+  </div><!-- /page -->
+
+  <script>
+    const BASE = "";
+    const MAX_MB = 500;
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.getElementById("viewSummarize").classList.toggle("hidden", tab !== "summarize");
+      document.getElementById("viewTrain").classList.toggle("hidden",     tab !== "train");
+      document.getElementById("tabSummarize").classList.toggle("active",  tab === "summarize");
+      document.getElementById("tabTrain").classList.toggle("active",      tab === "train");
+      if (tab === "train") { checkFiles(); startPolling(); }
+    }
+
+    // ── Auto-detect completed steps ───────────────────────────────────────────
+    async function checkFiles() {
+      try {
+        const res = await fetch(`${BASE}/train/files`);
+        if (!res.ok) return;
+        const f = await res.json();
+
+        if (f.dataset || f.vocab) {
+          markStepDone("dataset");
+        }
+        if (f.model) {
+          markStepDone("model");
+        }
+      } catch {}
+    }
+
+    function markStepDone(phase) {
+      if (phase === "dataset") {
+        document.getElementById("datasetProgressLabel").textContent = "Complete — dataset.pkl ready";
+        document.getElementById("datasetProgressPct").textContent   = "100%";
+        document.getElementById("datasetFill").style.width          = "100%";
+        document.getElementById("datasetSpeed").textContent         = "";
+        document.getElementById("datasetEta").textContent           = "";
+      }
+      if (phase === "model") {
+        document.getElementById("modelProgressLabel").textContent = "Complete — caption_model.pt ready";
+        document.getElementById("modelProgressPct").textContent   = "100%";
+        document.getElementById("modelFill").style.width          = "100%";
+        document.getElementById("mTrainLoss").textContent         = "saved";
+        document.getElementById("mValLoss").textContent           = "saved";
+        document.getElementById("mEpoch").textContent             = "done";
+      }
+    }
+
+    // ── File handling ─────────────────────────────────────────────────────────
+    const videoInput  = document.getElementById("videoInput");
+    const dropZone    = document.getElementById("dropZone");
+    const fileInfo    = document.getElementById("fileInfo");
+    const fileName    = document.getElementById("fileName");
+    const fileMeta    = document.getElementById("fileMeta");
+    const clearBtn    = document.getElementById("clearBtn");
+    const videoBtn    = document.getElementById("videoBtn");
+    const textBtn     = document.getElementById("textBtn");
+    const statusDot   = document.getElementById("statusDot");
+    const statusMsg   = document.getElementById("statusMsg");
+    const resultArea  = document.getElementById("resultArea");
+    const videoResult = document.getElementById("videoResult");
+    const textResult  = document.getElementById("textResult");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    let selectedFile = null, busy = false, videoObjectUrl = null;
+
+    function fmtBytes(b) {
+      const u=["B","KB","MB","GB"], i=Math.floor(Math.log(b)/Math.log(1024));
+      return `${(b/1024**i).toFixed(1)} ${u[i]}`;
+    }
+    function setStatus(msg, type="idle") {
+      statusMsg.textContent = msg;
+      statusDot.dataset.type = type;
+    }
+    function setFile(file) {
+      if (!file) { clearFile(); return; }
+      if (!file.name.toLowerCase().endsWith(".mp4")) { setStatus("Only .mp4 files are allowed","error"); return; }
+      if (file.size > MAX_MB*1024*1024) { setStatus(`File too large (max ${MAX_MB} MB)`,"error"); return; }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileMeta.textContent = fmtBytes(file.size);
+      fileInfo.hidden = false;
+      dropZone.querySelector(".dz-body").hidden = true;
+      videoBtn.disabled = false; textBtn.disabled = false;
+      setStatus("Ready","ready");
+    }
+    function clearFile() {
+      selectedFile = null; videoInput.value = "";
+      fileInfo.hidden = true; dropZone.querySelector(".dz-body").hidden = false;
+      videoBtn.disabled = true; textBtn.disabled = true;
+      setStatus("Idle","idle");
+    }
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); if (!busy) dropZone.classList.add("drag-over"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("drag-over"); if (!busy) setFile(e.dataTransfer?.files?.[0]??null); });
+    videoInput.addEventListener("change", () => setFile(videoInput.files?.[0]??null));
+    clearBtn.addEventListener("click", e => { e.preventDefault(); if (!busy) clearFile(); });
+
+    function setBusy(f) { busy=f; videoBtn.disabled=f; textBtn.disabled=f; }
+
+    // ── Video summary ─────────────────────────────────────────────────────────
+    videoBtn.addEventListener("click", async () => {
+      if (!selectedFile || busy) return;
+      setBusy(true); setStatus("Processing video…","loading");
+      resultArea.classList.add("hidden"); videoResult.classList.add("hidden"); textResult.classList.add("hidden");
+      if (videoObjectUrl) { URL.revokeObjectURL(videoObjectUrl); videoObjectUrl=null; }
+      const form = new FormData(); form.append("video", selectedFile);
+      try {
+        const res = await fetch(`${BASE}/summarize`,{method:"POST",body:form});
+        if (!res.ok) { const d=await res.json().catch(()=>({})); setStatus("Error: "+(d.error||res.statusText),"error"); return; }
+        const blob = await res.blob();
+        videoObjectUrl = URL.createObjectURL(blob);
+        videoPlayer.src = videoObjectUrl;
+        downloadBtn.onclick = () => { const a=document.createElement("a"); a.href=videoObjectUrl; a.download=selectedFile.name.replace(/\.mp4$/i,"_summary.mp4"); a.click(); };
+        videoResult.classList.remove("hidden"); resultArea.classList.remove("hidden");
+        setStatus("Done — video summary ready","success");
+      } catch(err) { setStatus("Failed: "+err.message,"error"); }
+      finally { setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
+    });
+
+    // ── Text summary ──────────────────────────────────────────────────────────
+    textBtn.addEventListener("click", async () => {
+      if (!selectedFile || busy) return;
+      setBusy(true); setStatus("Generating text summary…","loading");
+      resultArea.classList.add("hidden"); videoResult.classList.add("hidden"); textResult.classList.add("hidden");
+      const form = new FormData(); form.append("video", selectedFile);
+      try {
+        const res = await fetch(`${BASE}/text-summarize`,{method:"POST",body:form});
+        const data = await res.json();
+        if (!res.ok) { setStatus("Error: "+(data.error||res.statusText),"error"); return; }
+        renderSchema(data);
+        textResult.classList.remove("hidden"); resultArea.classList.remove("hidden");
+        setStatus("Done — text summary ready","success");
+      } catch(err) { setStatus("Failed: "+err.message,"error"); }
+      finally { setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
+    });
+
+    function renderSchema(data) {
+      document.getElementById("schemaTitle").textContent = data.title||"Summary";
+      document.getElementById("schemaSummary").textContent = data.summary||"—";
+      const ooda=data.ooda||{};
+      document.getElementById("oodaObserve").textContent=ooda.observe||"—";
+      document.getElementById("oodaOrient").textContent=ooda.orient||"—";
+      document.getElementById("oodaDecide").textContent=ooda.decide||"—";
+      document.getElementById("oodaAct").textContent=ooda.act||"—";
+      const list=document.getElementById("momentsList"); list.innerHTML="";
+      (data.key_moments||[]).forEach(m=>{
+        const c=document.createElement("div"); c.className="moment-chip";
+        c.innerHTML=`<span class="moment-ts">${m.timestamp}</span><span class="moment-label">${m.label}</span>`;
+        list.appendChild(c);
+      });
+      const stats=data.stats||{}, row=document.getElementById("statsRow"); row.innerHTML="";
+      [["Scenes",stats.scene_count??"—"],["Duration",(stats.duration_analyzed_sec??null)!=null?stats.duration_analyzed_sec+"s":"—"],["Seg/sec",stats.segments_per_sec??"—"]].forEach(([l,v])=>{
+        const s=document.createElement("div"); s.className="stat-chip";
+        s.innerHTML=`<span class="stat-val">${v}</span><span class="stat-label">${l}</span>`; row.appendChild(s);
+      });
+      document.getElementById("jsonRaw").textContent=JSON.stringify(data,null,2);
+    }
+
+    // ── Training panel ────────────────────────────────────────────────────────
+    let pollTimer = null;
+    let chartHistory = [];
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(fetchStatus, 1200);
+      fetchStatus();
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch(`${BASE}/train/status`);
+        if (!res.ok) return;
+        const s = await res.json();
+        updateTrainUI(s);
+      } catch {}
+    }
+
+    function updateTrainUI(s) {
+      const phase    = s.phase;
+      const running  = s.running;
+      const done     = s.done;
+      const progress = s.progress || 0;
+      const total    = s.total    || 0;
+      const pct      = total > 0 ? Math.round((progress / total) * 100) : 0;
+
+      // ── dataset step ──
+      const isDataset = phase === "dataset";
+      const isModel   = phase === "model";
+
+      if (isDataset || phase === null) {
+        document.getElementById("startDatasetBtn").classList.toggle("hidden", running && isDataset);
+        document.getElementById("stopDatasetBtn").classList.toggle("hidden",  !(running && isDataset));
+        if (isDataset) {
+          document.getElementById("datasetProgressLabel").textContent =
+            done ? "Complete" : running ? `${progress.toLocaleString()} / ${total.toLocaleString()} videos` : "Waiting…";
+          document.getElementById("datasetProgressPct").textContent = done ? "100%" : `${pct}%`;
+          document.getElementById("datasetFill").style.width = done ? "100%" : `${pct}%`;
+          document.getElementById("datasetSpeed").textContent = s.speed || "";
+          document.getElementById("datasetEta").textContent  = s.eta   ? `ETA ${s.eta}` : "";
+        }
+      }
+
+      // ── model step ──
+      if (isModel || phase === null) {
+        document.getElementById("startModelBtn").classList.toggle("hidden", running && isModel);
+        document.getElementById("stopModelBtn").classList.toggle("hidden",  !(running && isModel));
+        if (isModel) {
+          const epochLabel = total > 0 ? `Epoch ${progress} / ${total}` : "Waiting…";
+          document.getElementById("modelProgressLabel").textContent = done ? "Training complete" : running ? epochLabel : "Waiting…";
+          document.getElementById("modelProgressPct").textContent = done ? "100%" : `${pct}%`;
+          document.getElementById("modelFill").style.width = done ? "100%" : `${pct}%`;
+          if (s.train_loss != null) document.getElementById("mTrainLoss").textContent = s.train_loss.toFixed(4);
+          if (s.val_loss   != null) document.getElementById("mValLoss").textContent   = s.val_loss.toFixed(4);
+          if (s.bleu       != null) document.getElementById("mBleu").textContent      = s.bleu.toFixed(4);
+          if (s.epoch      != null) document.getElementById("mEpoch").textContent     = `${s.epoch}/${s.epochs}`;
+          if (s.history && s.history.length !== chartHistory.length) {
+            chartHistory = s.history;
+            drawChart(chartHistory);
+          }
+        }
+      }
+
+      // ── log ──
+      const logBox = document.getElementById("logBox");
+      if (s.log && s.log.length > 0) {
+        logBox.innerHTML = s.log.map(l =>
+          `<div class="log-line">${escHtml(l)}</div>`
+        ).join("");
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    async function startPhase(phase) {
+      try {
+        const res = await fetch(`${BASE}/train/start/${phase}`, { method: "POST" });
+        const d = await res.json();
+        if (!res.ok) { alert(d.error || "Failed to start"); return; }
+        startPolling();
+      } catch(e) { alert("Could not reach server: " + e.message); }
+    }
+
+    async function stopJob() {
+      try { await fetch(`${BASE}/train/stop`, { method: "POST" }); } catch {}
+    }
+
+    async function resetJob() {
+      try {
+        await fetch(`${BASE}/train/reset`, { method: "POST" });
+        chartHistory = [];
+        document.getElementById("logBox").innerHTML = "";
+        ["datasetProgressLabel","modelProgressLabel"].forEach(id => document.getElementById(id).textContent = "Waiting…");
+        ["datasetProgressPct","modelProgressPct"].forEach(id => document.getElementById(id).textContent = "0%");
+        ["datasetFill","modelFill"].forEach(id => document.getElementById(id).style.width = "0%");
+        ["startDatasetBtn","startModelBtn"].forEach(id => document.getElementById(id).classList.remove("hidden"));
+        ["stopDatasetBtn","stopModelBtn"].forEach(id => document.getElementById(id).classList.add("hidden"));
+      } catch(e) { alert("Could not reset: " + e.message); }
+    }
+
+    // ── Loss chart ────────────────────────────────────────────────────────────
+    function drawChart(history) {
+      const canvas = document.getElementById("lossChart");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const pad = { top: 16, right: 16, bottom: 32, left: 48 };
+
+      ctx.clearRect(0, 0, W, H);
+
+      if (!history.length) return;
+
+      const trainLosses = history.map(h => h.train_loss);
+      const valLosses   = history.map(h => h.val_loss);
+      const allLosses   = [...trainLosses, ...valLosses];
+      const minY = Math.min(...allLosses) * 0.95;
+      const maxY = Math.max(...allLosses) * 1.05;
+      const epochs = history.length;
+
+      function xPos(i)   { return pad.left + (i / Math.max(epochs - 1, 1)) * (W - pad.left - pad.right); }
+      function yPos(val) { return pad.top  + (1 - (val - minY) / (maxY - minY)) * (H - pad.top - pad.bottom); }
+
+      // Grid lines
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (i / 4) * (H - pad.top - pad.bottom);
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+        const val = maxY - (i / 4) * (maxY - minY);
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.font = "10px Inter, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(val.toFixed(2), pad.left - 6, y + 4);
+      }
+
+      // X axis labels
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      const step = Math.max(1, Math.floor(epochs / 6));
+      for (let i = 0; i < epochs; i += step) {
+        ctx.fillText(history[i].epoch, xPos(i), H - pad.bottom + 14);
+      }
+
+      // Draw line helper
+      function drawLine(values, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        values.forEach((v, i) => {
+          const x = xPos(i), y = yPos(v);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // Dot at last point
+        const lx = xPos(values.length - 1), ly = yPos(values[values.length - 1]);
+        ctx.beginPath();
+        ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      drawLine(trainLosses, "#7c3aed");
+      drawLine(valLosses,   "#06b6d4");
+
+      // Legend
+      ctx.font = "11px Inter, sans-serif"; ctx.textAlign = "left";
+      ctx.fillStyle = "#7c3aed"; ctx.fillRect(pad.left, pad.top - 4, 10, 3);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillText("Train", pad.left + 14, pad.top);
+      ctx.fillStyle = "#06b6d4"; ctx.fillRect(pad.left + 70, pad.top - 4, 10, 3);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillText("Val", pad.left + 84, pad.top);
+    }
+  </script>
+</body>
+</html>
