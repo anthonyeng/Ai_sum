@@ -1,8 +1,18 @@
+"""
+VIDEO -> VIDEO summarization pipeline.
+
+Takes an input video, extracts ResNet18 features, predicts importance scores
+via XGBoost, selects key scenes, and produces a condensed summary video.
+
+Run:
+    python src/inference/summarize.py <video_path>
+"""
+
 import os
 import sys
 import shutil
 import subprocess
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import joblib
@@ -10,78 +20,37 @@ import numpy as np
 from PIL import Image
 
 import torch
-import torchvision.models as models
-import torchvision.transforms as transforms
 
-MODEL_PATH = "outputs/models/xgboost_video_split.pkl"
-VIDEO_DIR = "uploads"
-TEMP_DIR = "outputs/temp_segments"
-SUMMARY_DIR = "outputs/summaries"
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-SEGMENT_SECONDS = 2
-
-# quality / behavior tuning
-TOP_RATIO = 0.15
-MIN_GAP = 4
-EXTEND = 2
-MAX_SUMMARY_SECONDS = 30
-
-
-def ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
-
-
-def clean_dir(path: str) -> None:
-    if os.path.exists(path):
-        shutil.rmtree(path)
-    os.makedirs(path, exist_ok=True)
-
-
-def load_resnet():
-    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-    model.fc = torch.nn.Identity()
-    model.eval()
-    model.to(DEVICE)
-    return model
-
-
-def get_transform():
-    return transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
-    ])
+from src.config.config import (
+    XGBOOST_MODEL_PATH, UPLOAD_DIR, TEMP_DIR, SUMMARY_DIR, DEVICE,
+    SEGMENT_SECONDS, TEMPORAL_RADIUS, THRESHOLD_FACTOR, MAX_SUMMARY_RATIO,
+    MIN_SUMMARY_SEGMENTS, CONTEXT_PAD, SIMILARITY_THRESHOLD, CROSSFADE_SECONDS,
+)
+from src.features.video_features import (
+    load_resnet, extract_feature_from_path, build_temporal_features,
+)
+from src.utils.helpers import ensure_dir, clean_dir
 
 
 def resolve_video_path(video_input: str) -> str:
     if os.path.exists(video_input):
         return os.path.abspath(video_input)
-
-    alt = os.path.join(VIDEO_DIR, video_input)
+    alt = os.path.join(UPLOAD_DIR, video_input)
     if os.path.exists(alt):
         return os.path.abspath(alt)
-
     raise FileNotFoundError(f"Video not found: {video_input}")
 
 
 def extract_segment_frames(video_path: str, output_dir: str) -> List[List[str]]:
     ensure_dir(output_dir)
-
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
-
     if fps <= 0:
         cap.release()
         raise ValueError(f"Could not read FPS from {video_path}")
 
     frame_interval = max(1, int(fps * SEGMENT_SECONDS))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
     segments: List[List[str]] = []
     segment_idx = 0
 
@@ -89,246 +58,255 @@ def extract_segment_frames(video_path: str, output_dir: str) -> List[List[str]]:
         start_frame = segment_idx * frame_interval
         if start_frame >= total_frames:
             break
-
         sample_offsets = [0, frame_interval // 2, max(0, frame_interval - 1)]
         segment_paths: List[str] = []
-
         for sample_idx, offset in enumerate(sample_offsets):
             target_frame = min(start_frame + offset, max(0, total_frames - 1))
             cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
             ret, frame = cap.read()
             if not ret:
                 continue
-
-            frame_path = os.path.join(
-                output_dir,
-                f"segment_{segment_idx:04d}_{sample_idx}.jpg"
-            )
+            frame_path = os.path.join(output_dir, f"segment_{segment_idx:04d}_{sample_idx}.jpg")
             cv2.imwrite(frame_path, frame)
             segment_paths.append(frame_path)
-
         if segment_paths:
             segments.append(segment_paths)
-
         segment_idx += 1
 
     cap.release()
     return segments
 
 
-def extract_feature(image_path: str, model, transform) -> np.ndarray:
-    image = Image.open(image_path).convert("RGB")
-    tensor = transform(image).unsqueeze(0).to(DEVICE)
-
-    with torch.no_grad():
-        feature = model(tensor)
-
-    return feature.squeeze().cpu().numpy()
-
-
-def predict_segment_scores(video_path: str):
+def extract_features_and_scores(video_path: str):
+    """Extract ResNet features and predict importance scores for each segment."""
     frames_dir = os.path.join(TEMP_DIR, "frames")
     clean_dir(frames_dir)
 
-    frame_groups = extract_segment_frames(video_path, frames_dir)
+    try:
+        frame_groups = extract_segment_frames(video_path, frames_dir)
+        if not frame_groups:
+            raise ValueError("No segment frames extracted.")
 
-    if not frame_groups:
-        raise ValueError("No segment frames extracted.")
+        if not os.path.exists(XGBOOST_MODEL_PATH):
+            raise FileNotFoundError(f"Model not found: {os.path.abspath(XGBOOST_MODEL_PATH)}")
 
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model not found: {os.path.abspath(MODEL_PATH)}")
+        resnet, transform = load_resnet()
+        model = joblib.load(XGBOOST_MODEL_PATH)
 
-    resnet = load_resnet()
-    transform = get_transform()
-    model = joblib.load(MODEL_PATH)
+        features = []
+        for segment in frame_groups:
+            seg_feats = [extract_feature_from_path(fp) for fp in segment]
+            if seg_feats:
+                features.append(np.array(seg_feats, dtype=np.float32).mean(axis=0))
 
-    features = []
+        if not features:
+            raise ValueError("No features extracted from segments.")
 
-    for segment in frame_groups:
-        seg_feats = []
-
-        for frame_path in segment:
-            feat = extract_feature(frame_path, resnet, transform)
-            seg_feats.append(feat)
-
-        if not seg_feats:
-            continue
-
-        seg_feats = np.array(seg_feats, dtype=np.float32)
-        features.append(seg_feats.mean(axis=0))
-
-    if not features:
-        raise ValueError("No features extracted from segments.")
-
-    X = np.array(features, dtype=np.float32)
-    preds = model.predict(X).astype(np.float32)
-
-    return preds, len(features)
+        raw_features = np.array(features, dtype=np.float32)
+        X = build_temporal_features(raw_features, radius=TEMPORAL_RADIUS)
+        scores = model.predict(X).astype(np.float32)
+        return raw_features, scores
+    finally:
+        if os.path.exists(frames_dir):
+            shutil.rmtree(frames_dir)
 
 
-def select_smart_segments(scores: np.ndarray) -> List[int]:
-    n_segments = len(scores)
-    if n_segments == 0:
+def select_important_segments(scores: np.ndarray) -> List[int]:
+    """Select segments above an adaptive importance threshold."""
+    n = len(scores)
+    if n == 0:
         return []
 
-    ratio_limit = max(1, int(n_segments * TOP_RATIO))
-    duration_limit = max(1, int(MAX_SUMMARY_SECONDS // SEGMENT_SECONDS))
-    target_count = min(ratio_limit, duration_limit)
+    mean = scores.mean()
+    std = scores.std()
+    threshold = mean + THRESHOLD_FACTOR * std
+    selected = [i for i in range(n) if scores[i] >= threshold]
 
-    ranked = np.argsort(scores)[::-1]
-    selected: List[int] = []
+    if len(selected) < MIN_SUMMARY_SEGMENTS:
+        ranked = np.argsort(scores)[::-1]
+        selected = sorted(ranked[:MIN_SUMMARY_SEGMENTS].tolist())
 
-    for idx in ranked:
-        idx = int(idx)
+    max_segments = max(MIN_SUMMARY_SEGMENTS, int(n * MAX_SUMMARY_RATIO))
+    if len(selected) > max_segments:
+        scored = [(i, scores[i]) for i in selected]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        selected = sorted([i for i, _ in scored[:max_segments]])
 
-        if len(selected) >= target_count:
-            break
-
-        if any(abs(idx - s) <= MIN_GAP for s in selected):
-            continue
-
-        selected.append(idx)
-
-    return sorted(selected)
+    return selected
 
 
-def merge_segments(indices: List[int]):
+def group_into_scenes(indices: List[int], n_segments: int) -> List[Tuple[int, int]]:
+    """Group consecutive selected indices into scene ranges with context padding."""
     if not indices:
         return []
 
-    merged = []
+    scenes = []
     start = indices[0]
     prev = indices[0]
-
     for idx in indices[1:]:
-        if idx == prev + 1:
+        if idx <= prev + 2:
             prev = idx
         else:
-            merged.append((start, prev))
+            scenes.append((start, prev))
             start = idx
             prev = idx
+    scenes.append((start, prev))
 
-    merged.append((start, prev))
-    return merged
+    padded = []
+    for s, e in scenes:
+        s = max(0, s - CONTEXT_PAD)
+        e = min(n_segments - 1, e + CONTEXT_PAD)
+        padded.append((s, e))
 
-
-def extend_segments(ranges, max_len: int):
-    extended = []
-
-    for start, end in ranges:
-        start = max(0, start - EXTEND)
-        end = min(max_len - 1, end + EXTEND)
-        extended.append((start, end))
-
-    return extended
-
-
-def merge_overlapping_ranges(ranges):
-    if not ranges:
-        return []
-
-    ranges = sorted(ranges, key=lambda x: x[0])
-    merged = [ranges[0]]
-
-    for start, end in ranges[1:]:
-        last_start, last_end = merged[-1]
-
-        if start <= last_end + 1:
-            merged[-1] = (last_start, max(last_end, end))
+    padded.sort()
+    merged = [padded[0]]
+    for s, e in padded[1:]:
+        ls, le = merged[-1]
+        if s <= le + 1:
+            merged[-1] = (ls, max(le, e))
         else:
-            merged.append((start, end))
+            merged.append((s, e))
 
     return merged
 
 
-def trim_ranges_to_max_duration(ranges, max_summary_seconds: int):
-    if not ranges:
-        return []
+def deduplicate_scenes(scenes: List[Tuple[int, int]], features: np.ndarray) -> List[Tuple[int, int]]:
+    """Remove scenes that are visually too similar to a previous scene."""
+    if len(scenes) <= 1:
+        return scenes
 
-    max_segments_allowed = max(1, max_summary_seconds // SEGMENT_SECONDS)
-    trimmed = []
-    used = 0
+    scene_features = []
+    for s, e in scenes:
+        scene_feat = features[s:e + 1].mean(axis=0)
+        norm = np.linalg.norm(scene_feat)
+        if norm > 0:
+            scene_feat = scene_feat / norm
+        scene_features.append(scene_feat)
 
-    for start, end in ranges:
-        length = end - start + 1
+    kept = [0]
+    for i in range(1, len(scenes)):
+        is_duplicate = False
+        for j in kept:
+            sim = np.dot(scene_features[i], scene_features[j])
+            if sim > SIMILARITY_THRESHOLD:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            kept.append(i)
 
-        if used >= max_segments_allowed:
-            break
-
-        remaining = max_segments_allowed - used
-        if length <= remaining:
-            trimmed.append((start, end))
-            used += length
-        else:
-            trimmed.append((start, start + remaining - 1))
-            used += remaining
-            break
-
-    return trimmed
+    return [scenes[i] for i in kept]
 
 
-def cut_segments(video_path: str, ranges):
+def cut_scenes(video_path: str, scenes: List[Tuple[int, int]]) -> List[str]:
+    """Cut each scene from the video as a separate clip."""
     segments_dir = os.path.join(TEMP_DIR, "segments")
     clean_dir(segments_dir)
 
     output_files = []
-
-    for i, (start, end) in enumerate(ranges):
+    for i, (start, end) in enumerate(scenes):
         start_time = start * SEGMENT_SECONDS
         duration = (end - start + 1) * SEGMENT_SECONDS
-        output_path = os.path.join(segments_dir, f"part_{i:04d}.mp4")
+        output_path = os.path.join(segments_dir, f"scene_{i:04d}.mp4")
 
         cmd = [
-            "ffmpeg",
-            "-y",
+            "ffmpeg", "-y",
             "-ss", str(start_time),
             "-t", str(duration),
             "-i", video_path,
             "-c:v", "libx264",
             "-c:a", "aac",
+            "-preset", "fast",
             output_path,
         ]
-
-        subprocess.run(
-            cmd,
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         output_files.append(output_path)
 
     return output_files
 
 
-def concat_segments(segment_files: List[str], output_path: str) -> None:
-    if not segment_files:
-        raise ValueError("No segment files to concatenate.")
+def get_clip_duration(path: str) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error",
+         "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1",
+         path],
+        capture_output=True, text=True,
+    )
+    return float(result.stdout.strip())
 
+
+def concat_with_crossfade(clip_files: List[str], output_path: str) -> None:
+    """Concatenate clips with crossfade transitions between them."""
+    if not clip_files:
+        raise ValueError("No clips to concatenate.")
+
+    if len(clip_files) == 1:
+        shutil.copy(clip_files[0], output_path)
+        return
+
+    durations = [get_clip_duration(f) for f in clip_files]
+    fade = min(CROSSFADE_SECONDS, min(durations) / 2)
+
+    inputs = []
+    for f in clip_files:
+        inputs.extend(["-i", f])
+
+    video_filters = []
+    audio_filters = []
+
+    offset = durations[0] - fade
+    video_filters.append(f"[0:v][1:v]xfade=transition=fade:duration={fade}:offset={offset}[v01]")
+    audio_filters.append(f"[0:a][1:a]acrossfade=d={fade}[a01]")
+    cumulative_duration = durations[0] + durations[1] - fade
+
+    for i in range(2, len(clip_files)):
+        prev_v = f"v{0}{i - 1}" if i == 2 else f"vx{i - 1}"
+        prev_a = f"a{0}{i - 1}" if i == 2 else f"ax{i - 1}"
+        out_v = f"vx{i}" if i < len(clip_files) - 1 else "vout"
+        out_a = f"ax{i}" if i < len(clip_files) - 1 else "aout"
+
+        offset = cumulative_duration - fade
+        video_filters.append(f"[{prev_v}][{i}:v]xfade=transition=fade:duration={fade}:offset={offset}[{out_v}]")
+        audio_filters.append(f"[{prev_a}][{i}:a]acrossfade=d={fade}[{out_a}]")
+        cumulative_duration = cumulative_duration + durations[i] - fade
+
+    if len(clip_files) == 2:
+        final_v, final_a = "v01", "a01"
+    else:
+        final_v, final_a = "vout", "aout"
+
+    filter_complex = ";".join(video_filters + audio_filters)
+
+    cmd = [
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", filter_complex,
+        "-map", f"[{final_v}]", "-map", f"[{final_a}]",
+        "-c:v", "libx264", "-c:a", "aac", "-preset", "fast",
+        output_path,
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Crossfade failed, falling back to simple concat: {result.stderr[-200:]}")
+        concat_simple(clip_files, output_path)
+
+
+def concat_simple(clip_files: List[str], output_path: str) -> None:
+    """Fallback: simple concat without transitions."""
     concat_file = os.path.join(TEMP_DIR, "concat.txt")
-
     with open(concat_file, "w") as f:
-        for segment_file in segment_files:
-            abs_path = os.path.abspath(segment_file)
-            f.write(f"file '{abs_path}'\n")
+        for clip in clip_files:
+            f.write(f"file '{os.path.abspath(clip)}'\n")
 
     subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concat_file,
-            "-c:v", "libx264",
-            "-c:a", "aac",
-            output_path,
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+         "-i", concat_file, "-c:v", "libx264", "-c:a", "aac",
+         output_path],
+        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
 
-def summarize_video(video_input: str) -> None:
+def summarize_video(video_input: str) -> str:
     ensure_dir(SUMMARY_DIR)
     ensure_dir(TEMP_DIR)
 
@@ -337,34 +315,54 @@ def summarize_video(video_input: str) -> None:
 
     print(f"Processing: {video_path}")
 
-    scores, n_segments = predict_segment_scores(video_path)
+    try:
+        # 1. extract features and predict importance
+        features, scores = extract_features_and_scores(video_path)
+        n_segments = len(scores)
 
-    selected = select_smart_segments(scores)
-    merged = merge_segments(selected)
-    extended = extend_segments(merged, n_segments)
-    cleaned = merge_overlapping_ranges(extended)
-    final_ranges = trim_ranges_to_max_duration(cleaned, MAX_SUMMARY_SECONDS)
+        print(f"Segments: {n_segments} ({n_segments * SEGMENT_SECONDS}s video)")
+        print(f"Scores — min: {scores.min():.2f}, max: {scores.max():.2f}, "
+              f"mean: {scores.mean():.2f}, std: {scores.std():.2f}")
 
-    if not final_ranges:
-        raise ValueError("No final ranges selected for summary.")
+        # 2. select important segments
+        selected = select_important_segments(scores)
+        print(f"Selected {len(selected)} important segments")
 
-    print(f"Selected segment indices: {selected}")
-    print(f"Merged ranges: {merged}")
-    print(f"Extended ranges: {extended}")
-    print(f"Final ranges: {final_ranges}")
+        # 3. group into scenes
+        scenes = group_into_scenes(selected, n_segments)
+        print(f"Grouped into {len(scenes)} scenes: {scenes}")
 
-    segment_files = cut_segments(video_path, final_ranges)
+        # 4. deduplicate
+        scenes = deduplicate_scenes(scenes, features)
+        print(f"After dedup: {len(scenes)} scenes: {scenes}")
 
-    output_name = os.path.splitext(video_filename)[0] + "_summary.mp4"
-    output_path = os.path.join(SUMMARY_DIR, output_name)
+        if not scenes:
+            raise ValueError("No scenes selected for summary.")
 
-    concat_segments(segment_files, output_path)
+        total_summary_segments = sum(e - s + 1 for s, e in scenes)
+        print(f"Summary duration: ~{total_summary_segments * SEGMENT_SECONDS}s "
+              f"({total_summary_segments}/{n_segments} segments, "
+              f"{total_summary_segments / n_segments * 100:.0f}%)")
 
-    print(f"Summary saved to: {output_path}")
+        # 5. cut scenes
+        clip_files = cut_scenes(video_path, scenes)
+
+        # 6. concatenate with crossfade
+        output_name = os.path.splitext(video_filename)[0] + "_summary.mp4"
+        output_path = os.path.join(SUMMARY_DIR, output_name)
+        concat_with_crossfade(clip_files, output_path)
+
+        print(f"Summary saved to: {output_path}")
+        return output_path
+
+    finally:
+        # Clean up temp segments
+        segments_dir = os.path.join(TEMP_DIR, "segments")
+        if os.path.exists(segments_dir):
+            shutil.rmtree(segments_dir)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise ValueError("Usage: python src/inference/summarize.py <video_path>")
-
     summarize_video(sys.argv[1])

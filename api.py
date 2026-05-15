@@ -21,6 +21,8 @@ TEXT_SCRIPT = os.path.join(BASE_DIR, "src", "inference", "text_summarize.py")
 DATASET_SCRIPT = os.path.join(BASE_DIR, "src", "data", "build_caption_dataset.py")
 TRAIN_SCRIPT = os.path.join(BASE_DIR, "src", "training", "train_caption.py")
 
+MAX_UPLOAD_MB = 500
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -67,8 +69,6 @@ def _push_log(line):
 
 def _parse_line(line):
     """Parse a stdout line from either training script and update _job."""
-    # ── tqdm progress (dataset build) ──────────────────────────────────────
-    # "Processing videos:  45%|...| 3154/7010 [06:12<07:35,  8.47it/s]"
     m = re.search(r'(\d+)/(\d+)\s+\[[\d:]+<([\d:]+),\s*([\d.]+)it/s\]', line)
     if m:
         with _job_lock:
@@ -78,7 +78,6 @@ def _parse_line(line):
             _job["speed"] = f"{float(m.group(4)):.1f} vid/s"
         return
 
-    # ── vocab / dataset saved ──────────────────────────────────────────────
     if "Vocabulary size:" in line:
         m = re.search(r'Vocabulary size:\s*(\d+)', line)
         if m:
@@ -93,8 +92,6 @@ def _parse_line(line):
         _push_log("Dataset saved successfully")
         return
 
-    # ── training epoch ─────────────────────────────────────────────────────
-    # "Epoch   5/ 30 | Train 3.2100 | Val 3.4500 | PPL 31.5 | BLEU-4 0.0234"
     m = re.search(
         r'Epoch\s+(\d+)/\s*(\d+)\s*\|.*?Train\s+([\d.]+).*?Val\s+([\d.]+).*?BLEU-4\s+([\d.]+)',
         line
@@ -125,12 +122,10 @@ def _parse_line(line):
         )
         return
 
-    # ── best model saved ───────────────────────────────────────────────────
     if "best model saved" in line.lower() or "saved best" in line.lower():
         _push_log(line.strip())
         return
 
-    # ── model parameters / device ──────────────────────────────────────────
     if "Parameters:" in line or "Device:" in line or "Samples:" in line or "Vocab" in line:
         _push_log(line.strip())
 
@@ -158,7 +153,6 @@ def _run_process(script, phase):
     )
 
     for raw_line in _proc.stdout:
-        # tqdm uses \r — split on it and take the last non-empty chunk
         for line in re.split(r'\r', raw_line):
             line = line.strip()
             if line:
@@ -274,6 +268,12 @@ def summarize():
     input_path = os.path.join(UPLOAD_FOLDER, saved_name)
     file.save(input_path)
 
+    # Check file size
+    size_mb = os.path.getsize(input_path) / (1024 * 1024)
+    if size_mb > MAX_UPLOAD_MB:
+        os.remove(input_path)
+        return jsonify({"error": f"File too large ({size_mb:.0f} MB, max {MAX_UPLOAD_MB} MB)"}), 400
+
     try:
         result = subprocess.run(
             [sys.executable, SUMMARIZER_SCRIPT, input_path],
@@ -283,6 +283,9 @@ def summarize():
             print("STDERR:", result.stderr)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": "Summarization failed", "stderr": e.stderr}), 500
+    finally:
+        if os.path.exists(input_path):
+            os.remove(input_path)
 
     output_name = os.path.splitext(saved_name)[0] + "_summary.mp4"
     output_path = os.path.join(OUTPUT_FOLDER, output_name)
@@ -314,6 +317,12 @@ def text_summarize():
     saved_name = _unique_name(file.filename)
     input_path = os.path.join(UPLOAD_FOLDER, saved_name)
     file.save(input_path)
+
+    # Check file size
+    size_mb = os.path.getsize(input_path) / (1024 * 1024)
+    if size_mb > MAX_UPLOAD_MB:
+        os.remove(input_path)
+        return jsonify({"error": f"File too large ({size_mb:.0f} MB, max {MAX_UPLOAD_MB} MB)"}), 400
 
     try:
         result = subprocess.run(
