@@ -5,33 +5,73 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Video Summarizer</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>AI</text></svg>">
 </head>
 <body>
+
+  <!-- Loading overlay -->
+  <div class="spinner-overlay" id="spinnerOverlay">
+    <div class="spinner"></div>
+    <div class="spinner-text" id="spinnerText">Processing video...</div>
+    <div class="spinner-sub" id="spinnerSub">This may take a minute</div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
   <div class="page">
 
     <!-- Header -->
     <header class="header">
-      <div class="logo-mark">AI</div>
+      <div class="logo-mark">VS</div>
       <div class="header-text">
-        <h1 class="header-title">Video Summarizer</h1>
-        <p class="header-sub">Upload a video. Choose your summary type.</p>
+        <h1 class="header-title">AI Video Summarizer</h1>
+        <p class="header-sub">Pure ML pipeline &mdash; no LLMs, no API keys</p>
       </div>
-      <!-- Nav tabs -->
       <nav class="nav-tabs">
-        <button class="nav-tab active" id="tabSummarize" onclick="switchTab('summarize')">Summarize</button>
-        <button class="nav-tab" id="tabTrain" onclick="switchTab('train')">Training</button>
+        <button class="nav-tab active" id="tabSummarize" onclick="switchTab('summarize')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          Summarize
+        </button>
+        <button class="nav-tab" id="tabTrain" onclick="switchTab('train')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Training
+        </button>
       </nav>
     </header>
 
-    <!-- ═══════════════════════════════════════════════════════ SUMMARIZE TAB -->
+    <!-- ════════════════════════════════════════════════════ SUMMARIZE TAB -->
     <div id="viewSummarize">
 
+      <!-- Pipeline info -->
+      <div class="pipeline-bar">
+        <div class="pipeline-chip">
+          <div class="pipeline-icon pi-purple">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </div>
+          <div class="pipeline-info">
+            <div class="pipeline-name">Video to Video</div>
+            <div class="pipeline-desc">XGBoost + ResNet18 + FFmpeg</div>
+          </div>
+        </div>
+        <div class="pipeline-chip">
+          <div class="pipeline-icon pi-cyan">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+          </div>
+          <div class="pipeline-info">
+            <div class="pipeline-name">Video to Text</div>
+            <div class="pipeline-desc">BiGRU + Attention + LSTM</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload card -->
       <div class="card upload-card">
         <label class="drop-zone" id="dropZone" for="videoInput">
           <input type="file" id="videoInput" accept="video/mp4" hidden />
           <div class="dz-body">
             <div class="dz-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
@@ -42,7 +82,7 @@
           </div>
           <div class="file-info" id="fileInfo" hidden>
             <div class="file-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="23 7 16 12 23 17 23 7"/>
                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
               </svg>
@@ -57,32 +97,25 @@
 
         <div class="actions">
           <button class="btn btn-video" id="videoBtn" type="button" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="23 7 16 12 23 17 23 7"/>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             Video Summary
           </button>
           <button class="btn btn-text" id="textBtn" type="button" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="17" y1="10" x2="3" y2="10"/>
-              <line x1="21" y1="6" x2="3" y2="6"/>
-              <line x1="21" y1="14" x2="3" y2="14"/>
-              <line x1="17" y1="18" x2="3" y2="18"/>
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
             Text Summary
           </button>
         </div>
 
         <div class="status-bar">
           <span class="status-dot" id="statusDot"></span>
-          <span class="status-msg" id="statusMsg">Idle</span>
+          <span class="status-msg" id="statusMsg">Idle &mdash; waiting for upload</span>
         </div>
       </div>
 
       <!-- Results -->
       <div id="resultArea" class="result-area hidden">
 
+        <!-- Video result -->
         <div id="videoResult" class="card result-card hidden">
           <div class="result-header">
             <span class="result-tag tag-video">Video</span>
@@ -90,15 +123,12 @@
           </div>
           <video id="videoPlayer" class="video-player" controls></video>
           <button class="btn btn-download" id="downloadBtn" type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download Summary
           </button>
         </div>
 
+        <!-- Text result -->
         <div id="textResult" class="card result-card hidden">
           <div class="result-header">
             <span class="result-tag tag-text">Text</span>
@@ -126,7 +156,7 @@
             <div class="stats-row" id="statsRow"></div>
           </section>
           <details class="json-details">
-            <summary>Raw JSON Schema</summary>
+            <summary>View Raw JSON Schema</summary>
             <pre class="json-pre" id="jsonRaw"></pre>
           </details>
         </div>
@@ -134,7 +164,7 @@
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════ TRAINING TAB -->
+    <!-- ════════════════════════════════════════════════════ TRAINING TAB -->
     <div id="viewTrain" class="hidden">
 
       <!-- Step 1 -->
@@ -143,7 +173,7 @@
           <div class="step-badge">Step 1</div>
           <div>
             <div class="train-step-title">Build Dataset</div>
-            <div class="train-step-sub">Extract ResNet18 features from 7,010 MSR-VTT videos and build vocabulary</div>
+            <div class="train-step-sub">Extract ResNet18 features from MSR-VTT videos and build vocabulary</div>
           </div>
           <div class="train-step-actions">
             <button class="btn btn-start" id="startDatasetBtn" onclick="startPhase('dataset')">Run</button>
@@ -153,7 +183,7 @@
 
         <div class="train-progress-wrap" id="datasetProgress">
           <div class="train-progress-meta">
-            <span id="datasetProgressLabel">Waiting…</span>
+            <span id="datasetProgressLabel">Waiting...</span>
             <span id="datasetProgressPct">0%</span>
           </div>
           <div class="progress-track">
@@ -172,7 +202,7 @@
           <div class="step-badge step-badge-purple">Step 2</div>
           <div>
             <div class="train-step-title">Train Caption Model</div>
-            <div class="train-step-sub">BiGRU encoder + Bahdanau attention + LSTM decoder — 30 epochs</div>
+            <div class="train-step-sub">BiGRU encoder + Bahdanau attention + LSTM decoder &mdash; 30 epochs</div>
           </div>
           <div class="train-step-actions">
             <button class="btn btn-start btn-purple" id="startModelBtn" onclick="startPhase('model')">Run</button>
@@ -182,37 +212,35 @@
 
         <div class="train-progress-wrap" id="modelProgress">
           <div class="train-progress-meta">
-            <span id="modelProgressLabel">Waiting…</span>
+            <span id="modelProgressLabel">Waiting...</span>
             <span id="modelProgressPct">0%</span>
           </div>
           <div class="progress-track">
             <div class="progress-fill fill-purple" id="modelFill" style="width:0%"></div>
           </div>
 
-          <!-- Live metrics -->
           <div class="metrics-row" id="metricsRow">
             <div class="metric-box">
-              <div class="metric-val" id="mTrainLoss">—</div>
+              <div class="metric-val" id="mTrainLoss">&mdash;</div>
               <div class="metric-label">Train Loss</div>
             </div>
             <div class="metric-box">
-              <div class="metric-val" id="mValLoss">—</div>
+              <div class="metric-val" id="mValLoss">&mdash;</div>
               <div class="metric-label">Val Loss</div>
             </div>
             <div class="metric-box">
-              <div class="metric-val" id="mBleu">—</div>
+              <div class="metric-val" id="mBleu">&mdash;</div>
               <div class="metric-label">BLEU-4</div>
             </div>
             <div class="metric-box">
-              <div class="metric-val" id="mEpoch">—</div>
+              <div class="metric-val" id="mEpoch">&mdash;</div>
               <div class="metric-label">Epoch</div>
             </div>
           </div>
 
-          <!-- Loss chart -->
           <div class="chart-wrap" id="chartWrap">
             <div class="chart-label">Loss over epochs</div>
-            <canvas id="lossChart" width="620" height="160"></canvas>
+            <canvas id="lossChart" width="660" height="160"></canvas>
           </div>
         </div>
       </div>
@@ -222,7 +250,7 @@
         <div class="log-header">
           <span class="schema-label" style="margin:0">Console</span>
           <div style="display:flex;gap:8px">
-            <button class="log-clear-btn" onclick="resetJob()" style="color:#fca5a5;border-color:rgba(239,68,68,0.3)">Reset State</button>
+            <button class="log-clear-btn" onclick="resetJob()" style="color:var(--red);border-color:rgba(248,113,113,0.25)">Reset</button>
             <button class="log-clear-btn" onclick="document.getElementById('logBox').innerHTML=''">Clear</button>
           </div>
         </div>
@@ -236,6 +264,15 @@
   <script>
     const BASE = "";
     const MAX_MB = 500;
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    function showToast(msg, type = "error") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `toast toast-${type} active`;
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.classList.remove("active"), 4000);
+    }
 
     // ── Tab switching ─────────────────────────────────────────────────────────
     function switchTab(tab) {
@@ -252,13 +289,8 @@
         const res = await fetch(`${BASE}/train/files`);
         if (!res.ok) return;
         const f = await res.json();
-
-        if (f.dataset || f.vocab) {
-          markStepDone("dataset");
-        }
-        if (f.model) {
-          markStepDone("model");
-        }
+        if (f.dataset || f.vocab) markStepDone("dataset");
+        if (f.model) markStepDone("model");
       } catch {}
     }
 
@@ -278,6 +310,16 @@
         document.getElementById("mValLoss").textContent           = "saved";
         document.getElementById("mEpoch").textContent             = "done";
       }
+    }
+
+    // ── Spinner ───────────────────────────────────────────────────────────────
+    function showSpinner(text, sub) {
+      document.getElementById("spinnerText").textContent = text;
+      document.getElementById("spinnerSub").textContent = sub || "";
+      document.getElementById("spinnerOverlay").classList.add("active");
+    }
+    function hideSpinner() {
+      document.getElementById("spinnerOverlay").classList.remove("active");
     }
 
     // ── File handling ─────────────────────────────────────────────────────────
@@ -309,21 +351,32 @@
     }
     function setFile(file) {
       if (!file) { clearFile(); return; }
-      if (!file.name.toLowerCase().endsWith(".mp4")) { setStatus("Only .mp4 files are allowed","error"); return; }
-      if (file.size > MAX_MB*1024*1024) { setStatus(`File too large (max ${MAX_MB} MB)`,"error"); return; }
+      if (!file.name.toLowerCase().endsWith(".mp4")) {
+        showToast("Only .mp4 files are allowed");
+        setStatus("Invalid file type","error");
+        return;
+      }
+      if (file.size > MAX_MB*1024*1024) {
+        showToast(`File too large (max ${MAX_MB} MB)`);
+        setStatus("File too large","error");
+        return;
+      }
       selectedFile = file;
       fileName.textContent = file.name;
       fileMeta.textContent = fmtBytes(file.size);
       fileInfo.hidden = false;
       dropZone.querySelector(".dz-body").hidden = true;
       videoBtn.disabled = false; textBtn.disabled = false;
-      setStatus("Ready","ready");
+      setStatus("Ready — choose a summary type","ready");
     }
     function clearFile() {
       selectedFile = null; videoInput.value = "";
       fileInfo.hidden = true; dropZone.querySelector(".dz-body").hidden = false;
       videoBtn.disabled = true; textBtn.disabled = true;
-      setStatus("Idle","idle");
+      resultArea.classList.add("hidden");
+      videoResult.classList.add("hidden");
+      textResult.classList.add("hidden");
+      setStatus("Idle — waiting for upload","idle");
     }
     dropZone.addEventListener("dragover", e => { e.preventDefault(); if (!busy) dropZone.classList.add("drag-over"); });
     dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
@@ -336,43 +389,47 @@
     // ── Video summary ─────────────────────────────────────────────────────────
     videoBtn.addEventListener("click", async () => {
       if (!selectedFile || busy) return;
-      setBusy(true); setStatus("Processing video…","loading");
+      setBusy(true); setStatus("Processing video...","loading");
+      showSpinner("Generating video summary...", "Extracting features & cutting scenes");
       resultArea.classList.add("hidden"); videoResult.classList.add("hidden"); textResult.classList.add("hidden");
       if (videoObjectUrl) { URL.revokeObjectURL(videoObjectUrl); videoObjectUrl=null; }
       const form = new FormData(); form.append("video", selectedFile);
       try {
         const res = await fetch(`${BASE}/summarize`,{method:"POST",body:form});
-        if (!res.ok) { const d=await res.json().catch(()=>({})); setStatus("Error: "+(d.error||res.statusText),"error"); return; }
+        if (!res.ok) { const d=await res.json().catch(()=>({})); showToast(d.error||"Summarization failed"); setStatus("Error","error"); return; }
         const blob = await res.blob();
         videoObjectUrl = URL.createObjectURL(blob);
         videoPlayer.src = videoObjectUrl;
         downloadBtn.onclick = () => { const a=document.createElement("a"); a.href=videoObjectUrl; a.download=selectedFile.name.replace(/\.mp4$/i,"_summary.mp4"); a.click(); };
         videoResult.classList.remove("hidden"); resultArea.classList.remove("hidden");
         setStatus("Done — video summary ready","success");
-      } catch(err) { setStatus("Failed: "+err.message,"error"); }
-      finally { setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
+        showToast("Video summary generated!", "success");
+      } catch(err) { showToast("Failed: "+err.message); setStatus("Failed","error"); }
+      finally { hideSpinner(); setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
     });
 
     // ── Text summary ──────────────────────────────────────────────────────────
     textBtn.addEventListener("click", async () => {
       if (!selectedFile || busy) return;
-      setBusy(true); setStatus("Generating text summary…","loading");
+      setBusy(true); setStatus("Generating text summary...","loading");
+      showSpinner("Analyzing video content...", "Running caption model on segments");
       resultArea.classList.add("hidden"); videoResult.classList.add("hidden"); textResult.classList.add("hidden");
       const form = new FormData(); form.append("video", selectedFile);
       try {
         const res = await fetch(`${BASE}/text-summarize`,{method:"POST",body:form});
         const data = await res.json();
-        if (!res.ok) { setStatus("Error: "+(data.error||res.statusText),"error"); return; }
+        if (!res.ok) { showToast(data.error||"Text summarization failed"); setStatus("Error","error"); return; }
         renderSchema(data);
         textResult.classList.remove("hidden"); resultArea.classList.remove("hidden");
         setStatus("Done — text summary ready","success");
-      } catch(err) { setStatus("Failed: "+err.message,"error"); }
-      finally { setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
+        showToast("Text summary generated!", "success");
+      } catch(err) { showToast("Failed: "+err.message); setStatus("Failed","error"); }
+      finally { hideSpinner(); setBusy(false); videoBtn.disabled=false; textBtn.disabled=false; }
     });
 
     function renderSchema(data) {
       document.getElementById("schemaTitle").textContent = data.title||"Summary";
-      document.getElementById("schemaSummary").textContent = data.summary||"—";
+      document.getElementById("schemaSummary").textContent = data.summary||"No summary generated";
       const ooda=data.ooda||{};
       document.getElementById("oodaObserve").textContent=ooda.observe||"—";
       document.getElementById("oodaOrient").textContent=ooda.orient||"—";
@@ -381,7 +438,7 @@
       const list=document.getElementById("momentsList"); list.innerHTML="";
       (data.key_moments||[]).forEach(m=>{
         const c=document.createElement("div"); c.className="moment-chip";
-        c.innerHTML=`<span class="moment-ts">${m.timestamp}</span><span class="moment-label">${m.label}</span>`;
+        c.innerHTML=`<span class="moment-ts">${escHtml(m.timestamp)}</span><span class="moment-label">${escHtml(m.label)}</span>`;
         list.appendChild(c);
       });
       const stats=data.stats||{}, row=document.getElementById("statsRow"); row.innerHTML="";
@@ -419,7 +476,6 @@
       const total    = s.total    || 0;
       const pct      = total > 0 ? Math.round((progress / total) * 100) : 0;
 
-      // ── dataset step ──
       const isDataset = phase === "dataset";
       const isModel   = phase === "model";
 
@@ -428,7 +484,7 @@
         document.getElementById("stopDatasetBtn").classList.toggle("hidden",  !(running && isDataset));
         if (isDataset) {
           document.getElementById("datasetProgressLabel").textContent =
-            done ? "Complete" : running ? `${progress.toLocaleString()} / ${total.toLocaleString()} videos` : "Waiting…";
+            done ? "Complete" : running ? `${progress.toLocaleString()} / ${total.toLocaleString()} videos` : "Waiting...";
           document.getElementById("datasetProgressPct").textContent = done ? "100%" : `${pct}%`;
           document.getElementById("datasetFill").style.width = done ? "100%" : `${pct}%`;
           document.getElementById("datasetSpeed").textContent = s.speed || "";
@@ -436,13 +492,12 @@
         }
       }
 
-      // ── model step ──
       if (isModel || phase === null) {
         document.getElementById("startModelBtn").classList.toggle("hidden", running && isModel);
         document.getElementById("stopModelBtn").classList.toggle("hidden",  !(running && isModel));
         if (isModel) {
-          const epochLabel = total > 0 ? `Epoch ${progress} / ${total}` : "Waiting…";
-          document.getElementById("modelProgressLabel").textContent = done ? "Training complete" : running ? epochLabel : "Waiting…";
+          const epochLabel = total > 0 ? `Epoch ${progress} / ${total}` : "Waiting...";
+          document.getElementById("modelProgressLabel").textContent = done ? "Training complete" : running ? epochLabel : "Waiting...";
           document.getElementById("modelProgressPct").textContent = done ? "100%" : `${pct}%`;
           document.getElementById("modelFill").style.width = done ? "100%" : `${pct}%`;
           if (s.train_loss != null) document.getElementById("mTrainLoss").textContent = s.train_loss.toFixed(4);
@@ -456,7 +511,6 @@
         }
       }
 
-      // ── log ──
       const logBox = document.getElementById("logBox");
       if (s.log && s.log.length > 0) {
         logBox.innerHTML = s.log.map(l =>
@@ -467,20 +521,21 @@
     }
 
     function escHtml(s) {
-      return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
 
     async function startPhase(phase) {
       try {
         const res = await fetch(`${BASE}/train/start/${phase}`, { method: "POST" });
         const d = await res.json();
-        if (!res.ok) { alert(d.error || "Failed to start"); return; }
+        if (!res.ok) { showToast(d.error || "Failed to start"); return; }
         startPolling();
-      } catch(e) { alert("Could not reach server: " + e.message); }
+        showToast(`${phase === "dataset" ? "Dataset build" : "Model training"} started!`, "success");
+      } catch(e) { showToast("Could not reach server"); }
     }
 
     async function stopJob() {
-      try { await fetch(`${BASE}/train/stop`, { method: "POST" }); } catch {}
+      try { await fetch(`${BASE}/train/stop`, { method: "POST" }); showToast("Job stopped", "success"); } catch {}
     }
 
     async function resetJob() {
@@ -488,23 +543,30 @@
         await fetch(`${BASE}/train/reset`, { method: "POST" });
         chartHistory = [];
         document.getElementById("logBox").innerHTML = "";
-        ["datasetProgressLabel","modelProgressLabel"].forEach(id => document.getElementById(id).textContent = "Waiting…");
+        ["datasetProgressLabel","modelProgressLabel"].forEach(id => document.getElementById(id).textContent = "Waiting...");
         ["datasetProgressPct","modelProgressPct"].forEach(id => document.getElementById(id).textContent = "0%");
         ["datasetFill","modelFill"].forEach(id => document.getElementById(id).style.width = "0%");
         ["startDatasetBtn","startModelBtn"].forEach(id => document.getElementById(id).classList.remove("hidden"));
         ["stopDatasetBtn","stopModelBtn"].forEach(id => document.getElementById(id).classList.add("hidden"));
-      } catch(e) { alert("Could not reset: " + e.message); }
+        ["mTrainLoss","mValLoss","mBleu","mEpoch"].forEach(id => document.getElementById(id).innerHTML = "&mdash;");
+        const ctx = document.getElementById("lossChart").getContext("2d");
+        ctx.clearRect(0, 0, 660, 160);
+        showToast("State reset", "success");
+      } catch(e) { showToast("Could not reset"); }
     }
 
     // ── Loss chart ────────────────────────────────────────────────────────────
     function drawChart(history) {
       const canvas = document.getElementById("lossChart");
       const ctx = canvas.getContext("2d");
-      const W = canvas.width, H = canvas.height;
-      const pad = { top: 16, right: 16, bottom: 32, left: 48 };
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.offsetWidth * dpr;
+      canvas.height = 160 * dpr;
+      ctx.scale(dpr, dpr);
+      const W = canvas.offsetWidth, H = 160;
+      const pad = { top: 20, right: 16, bottom: 32, left: 48 };
 
       ctx.clearRect(0, 0, W, H);
-
       if (!history.length) return;
 
       const trainLosses = history.map(h => h.train_loss);
@@ -517,21 +579,20 @@
       function xPos(i)   { return pad.left + (i / Math.max(epochs - 1, 1)) * (W - pad.left - pad.right); }
       function yPos(val) { return pad.top  + (1 - (val - minY) / (maxY - minY)) * (H - pad.top - pad.bottom); }
 
-      // Grid lines
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      // Grid
+      ctx.strokeStyle = "rgba(255,255,255,0.04)";
       ctx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
         const y = pad.top + (i / 4) * (H - pad.top - pad.bottom);
         ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
         const val = maxY - (i / 4) * (maxY - minY);
-        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
         ctx.font = "10px Inter, sans-serif";
         ctx.textAlign = "right";
         ctx.fillText(val.toFixed(2), pad.left - 6, y + 4);
       }
 
-      // X axis labels
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.font = "10px Inter, sans-serif";
       ctx.textAlign = "center";
       const step = Math.max(1, Math.floor(epochs / 6));
@@ -539,34 +600,48 @@
         ctx.fillText(history[i].epoch, xPos(i), H - pad.bottom + 14);
       }
 
-      // Draw line helper
       function drawLine(values, color) {
+        // Gradient fill
+        const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+        grad.addColorStop(0, color + "15");
+        grad.addColorStop(1, "transparent");
+        ctx.beginPath();
+        values.forEach((v, i) => { i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v)); });
+        ctx.lineTo(xPos(values.length - 1), H - pad.bottom);
+        ctx.lineTo(xPos(0), H - pad.bottom);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Line
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.lineJoin = "round";
-        values.forEach((v, i) => {
-          const x = xPos(i), y = yPos(v);
-          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
+        values.forEach((v, i) => { i === 0 ? ctx.moveTo(xPos(i), yPos(v)) : ctx.lineTo(xPos(i), yPos(v)); });
         ctx.stroke();
-        // Dot at last point
+
+        // Dot
         const lx = xPos(values.length - 1), ly = yPos(values[values.length - 1]);
         ctx.beginPath();
-        ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+        ctx.arc(lx, ly, 4, 0, Math.PI * 2);
         ctx.fillStyle = color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
         ctx.fill();
       }
 
-      drawLine(trainLosses, "#7c3aed");
-      drawLine(valLosses,   "#06b6d4");
+      drawLine(trainLosses, "#8b5cf6");
+      drawLine(valLosses,   "#22d3ee");
 
       // Legend
       ctx.font = "11px Inter, sans-serif"; ctx.textAlign = "left";
-      ctx.fillStyle = "#7c3aed"; ctx.fillRect(pad.left, pad.top - 4, 10, 3);
-      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillText("Train", pad.left + 14, pad.top);
-      ctx.fillStyle = "#06b6d4"; ctx.fillRect(pad.left + 70, pad.top - 4, 10, 3);
-      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillText("Val", pad.left + 84, pad.top);
+      ctx.fillStyle = "#8b5cf6"; ctx.fillRect(pad.left, pad.top - 8, 12, 3); ctx.roundRect && 0;
+      ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.fillText("Train", pad.left + 16, pad.top - 3);
+      ctx.fillStyle = "#22d3ee"; ctx.fillRect(pad.left + 70, pad.top - 8, 12, 3);
+      ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.fillText("Val", pad.left + 86, pad.top - 3);
     }
   </script>
 </body>
