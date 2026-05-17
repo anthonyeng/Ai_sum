@@ -343,5 +343,73 @@ def text_summarize():
     return jsonify(data)
 
 
+# ── YouTube URL download + summarize ──────────────────────────────────────────
+
+@app.route("/url-summarize", methods=["POST"])
+def url_summarize():
+    data = request.get_json()
+    if not data or not data.get("url"):
+        return jsonify({"error": "No URL provided"}), 400
+
+    url = data["url"].strip()
+    mode = data.get("mode", "text")  # "text" or "video"
+
+    # Download video with yt-dlp
+    import uuid as _uuid
+    vid_name = f"yt_{_uuid.uuid4().hex[:8]}.mp4"
+    input_path = os.path.join(UPLOAD_FOLDER, vid_name)
+
+    try:
+        dl_result = subprocess.run(
+            ["yt-dlp", "-f", "mp4/best[height<=720]", "-o", input_path, "--no-playlist", url],
+            capture_output=True, text=True, timeout=120,
+        )
+        if dl_result.returncode != 0:
+            return jsonify({"error": "Failed to download video", "stderr": dl_result.stderr[-300:]}), 400
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Download timed out (max 2 min)"}), 400
+    except FileNotFoundError:
+        return jsonify({"error": "yt-dlp not installed. Run: pip install yt-dlp"}), 500
+
+    if not os.path.exists(input_path):
+        return jsonify({"error": "Download produced no file"}), 400
+
+    if mode == "video":
+        try:
+            result = subprocess.run(
+                [sys.executable, SUMMARIZER_SCRIPT, input_path],
+                capture_output=True, text=True, check=True, cwd=BASE_DIR,
+            )
+        except subprocess.CalledProcessError as e:
+            return jsonify({"error": "Summarization failed", "stderr": e.stderr}), 500
+        finally:
+            if os.path.exists(input_path):
+                os.remove(input_path)
+
+        output_name = os.path.splitext(vid_name)[0] + "_summary.mp4"
+        output_path = os.path.join(OUTPUT_FOLDER, output_name)
+        if not os.path.exists(output_path):
+            return jsonify({"error": "Output file not found"}), 500
+
+        return send_file(output_path, as_attachment=True,
+                         download_name="summary.mp4", mimetype="video/mp4")
+    else:
+        try:
+            result = subprocess.run(
+                [sys.executable, TEXT_SCRIPT, input_path],
+                capture_output=True, text=True, check=True, cwd=BASE_DIR,
+            )
+        except subprocess.CalledProcessError as e:
+            return jsonify({"error": "Text summarization failed", "stderr": e.stderr}), 500
+        finally:
+            if os.path.exists(input_path):
+                os.remove(input_path)
+
+        try:
+            return jsonify(json.loads(result.stdout))
+        except json.JSONDecodeError:
+            return jsonify({"error": "Invalid JSON output", "raw": result.stdout}), 500
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5003, debug=False, threaded=True)

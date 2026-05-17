@@ -933,6 +933,79 @@ body::before {
 .toast.toast-error { background: rgba(239,68,68,0.15); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
 .toast.toast-success { background: rgba(16,185,129,0.15); border: 1px solid rgba(52,211,153,0.3); color: var(--green); }
 
+/* ── Input mode toggle ──────────────────────────────────────────────────────── */
+
+.input-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.toggle-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.toggle-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.toggle-btn.active {
+  background: rgba(255,255,255,0.09);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* ── URL input ─────────────────────────────────────────────────────────────── */
+
+.url-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: border-color 0.2s;
+}
+
+.url-input-wrap:focus-within {
+  border-color: var(--purple);
+}
+
+.url-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.url-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 12px 12px 12px 0;
+  outline: none;
+}
+
+.url-input::placeholder { color: var(--dim); }
+
+.url-hint {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 8px;
+  padding-left: 4px;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {

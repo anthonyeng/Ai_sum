@@ -184,16 +184,25 @@ def _transcribe_audio(video_path):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _split_sentences(text):
-    """Split text into sentences."""
+    """Split text into sentences — handles unpunctuated transcripts."""
+    # Try standard punctuation first
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    # If no punctuation, split on commas or chunks
-    if len(sentences) <= 1 and len(text) > 100:
-        sentences = re.split(r'(?<=,)\s+', text)
-    if len(sentences) <= 1 and len(text) > 100:
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    # If transcript has no punctuation, split on natural break phrases
+    if len(sentences) <= 2 and len(text) > 150:
+        # Split on common transition words (Whisper often capitalizes these)
+        pattern = r'(?<!\w)(?:So |And |But |Now |Next |After |Before |Then |Also |However |In |The |This |It |We |You |He |She |They |If |When |Where |While |For |With |As |By |From |About )'
+        sentences = re.split(pattern, text)
+        sentences = [s.strip().rstrip(',') for s in sentences if s.strip() and len(s.strip()) > 15]
+
+    # Last resort: split into chunks of ~15 words
+    if len(sentences) <= 2 and len(text) > 150:
         words = text.split()
-        chunk_size = max(8, len(words) // 5)
+        chunk_size = max(12, min(20, len(words) // 8))
         sentences = [' '.join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
-    return [s.strip() for s in sentences if s.strip()]
+
+    return sentences
 
 
 def _tfidf_summarize(text, num_sentences=4):
@@ -202,6 +211,26 @@ def _tfidf_summarize(text, num_sentences=4):
     sentences = _split_sentences(text)
     if len(sentences) <= num_sentences:
         return sentences
+
+    # Filter out YouTube intro/outro filler
+    filler_patterns = [
+        r'subscribe', r'thumbs up', r'like.*video', r'bell icon', r'comment.*below',
+        r'click.*subscribe', r'notification', r'watch.*next', r'thank.*watching',
+        r'stay tuned', r'check.*out', r'link.*description', r'appreciated',
+        r'reminder to', r'our channel', r'next week', r'give.*correct.*answer',
+        r'stand.*chance.*win', r'amazon.*voucher',
+    ]
+    filler_re = re.compile('|'.join(filler_patterns), re.IGNORECASE)
+
+    filtered = []
+    for s in sentences:
+        if not filler_re.search(s) and len(s.split()) >= 5:
+            filtered.append(s)
+
+    if len(filtered) <= num_sentences:
+        return filtered if filtered else sentences[:num_sentences]
+
+    sentences = filtered
 
     # Tokenize
     stop_words = {'the','a','an','is','are','was','were','be','been','being',
@@ -215,23 +244,34 @@ def _tfidf_summarize(text, num_sentences=4):
                   'no','nor','not','only','own','same','so','than','too','very',
                   'just','because','but','and','or','if','while','that','this',
                   'it','its','i','you','he','she','we','they','me','him','her',
-                  'us','them','my','your','his','our','their','what','which','who'}
+                  'us','them','my','your','his','our','their','what','which','who',
+                  'decided','went','came','going','got','get','let','make','know',
+                  'think','want','see','look','find','give','tell','say','said',
+                  'weekend','friend','place','movie','watch','john','asked','started'}
 
     def tokenize(s):
         return [w.lower() for w in re.findall(r'[a-zA-Z]+', s) if w.lower() not in stop_words and len(w) > 2]
 
-    # Compute document frequency
-    doc_freq = Counter()
+    # Find topic keywords (most frequent content words across all sentences)
+    all_words = Counter()
     sent_tokens = []
     for s in sentences:
         tokens = tokenize(s)
         sent_tokens.append(tokens)
+        all_words.update(tokens)
+
+    # Top topic words = words that appear most across the document
+    topic_words = set(w for w, c in all_words.most_common(20))
+
+    # Compute document frequency
+    doc_freq = Counter()
+    for tokens in sent_tokens:
         for w in set(tokens):
             doc_freq[w] += 1
 
     n_docs = len(sentences)
 
-    # Score each sentence by sum of TF-IDF weights
+    # Score each sentence
     scores = []
     for i, tokens in enumerate(sent_tokens):
         if not tokens:
@@ -243,11 +283,19 @@ def _tfidf_summarize(text, num_sentences=4):
             tf_val = count / len(tokens)
             idf_val = math.log((n_docs + 1) / (doc_freq[word] + 1)) + 1
             score += tf_val * idf_val
-        # Bonus for position (first and last sentences are often important)
-        if i == 0:
-            score *= 1.3
-        elif i == n_docs - 1:
-            score *= 1.1
+            # Boost topic-relevant words
+            if word in topic_words:
+                score += 0.5
+
+        # Penalize very short sentences
+        if len(tokens) < 5:
+            score *= 0.5
+
+        # Slight boost for middle content (skip intro/outro)
+        position = i / max(n_docs - 1, 1)
+        if 0.1 < position < 0.85:
+            score *= 1.2
+
         scores.append(score)
 
     # Pick top sentences, maintain original order
@@ -369,13 +417,13 @@ def _build_schema(visual_captions, timestamps, duration, video_name,
     visual_deduped = _dedup_captions(visual_captions)
     visual_summary = ". ".join(visual_deduped) + "." if visual_deduped else ""
 
-    # Combined summary: audio (what's said) + visual (what's shown)
+    # Combined summary: audio (what's said) is primary, visual adds context
     if audio_summary:
         summary = audio_summary
-        if visual_summary:
-            summary += "\n\nVisual: " + visual_summary
-    else:
+    elif visual_summary:
         summary = visual_summary
+    else:
+        summary = ""
 
     # Title from audio summary or visual
     title_source = audio_summary if audio_summary else visual_summary
