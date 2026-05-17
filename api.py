@@ -6,6 +6,8 @@ import sys
 import threading
 import uuid
 
+import psycopg2
+import psycopg2.extras
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -14,6 +16,16 @@ app = Flask(__name__)
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+DB_URL = os.environ.get("DATABASE_URL", "dbname=video_summarizer")
+
+
+def get_db():
+    conn = psycopg2.connect(DB_URL)
+    conn.autocommit = True
+    return conn
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs", "summaries")
 SUMMARIZER_SCRIPT = os.path.join(BASE_DIR, "src", "inference", "summarize.py")
@@ -35,6 +47,75 @@ def _unique_name(filename):
     safe = secure_filename(filename)
     base, ext = os.path.splitext(safe)
     return f"{base}_{uuid.uuid4().hex[:8]}{ext}"
+
+
+# ── Chat CRUD ─────────────────────────────────────────────────────────────────
+
+@app.route("/chats", methods=["GET"])
+def list_chats():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, title, created_at FROM chats ORDER BY updated_at DESC")
+    chats = cur.fetchall()
+    conn.close()
+    return jsonify([{**c, "created_at": c["created_at"].isoformat()} for c in chats])
+
+
+@app.route("/chats", methods=["POST"])
+def create_chat():
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("INSERT INTO chats (title) VALUES ('New Chat') RETURNING id, title, created_at")
+    chat = cur.fetchone()
+    conn.close()
+    return jsonify({**chat, "created_at": chat["created_at"].isoformat()})
+
+
+@app.route("/chats/<int:chat_id>", methods=["GET"])
+def get_chat(chat_id):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, title, created_at FROM chats WHERE id=%s", (chat_id,))
+    chat = cur.fetchone()
+    if not chat:
+        conn.close()
+        return jsonify({"error": "Chat not found"}), 404
+    cur.execute("SELECT id, role, content, message_type, created_at FROM messages WHERE chat_id=%s ORDER BY created_at", (chat_id,))
+    messages = cur.fetchall()
+    conn.close()
+    return jsonify({
+        **chat,
+        "created_at": chat["created_at"].isoformat(),
+        "messages": [{**m, "created_at": m["created_at"].isoformat()} for m in messages],
+    })
+
+
+@app.route("/chats/<int:chat_id>", methods=["DELETE"])
+def delete_chat(chat_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM chats WHERE id=%s", (chat_id,))
+    conn.close()
+    return jsonify({"ok": True})
+
+
+def _save_message(chat_id, role, content, message_type):
+    """Save a message to the database and update chat title."""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO messages (chat_id, role, content, message_type) VALUES (%s, %s, %s, %s)",
+        (chat_id, role, json.dumps(content), message_type),
+    )
+    # Auto-update chat title from first AI response
+    if role == "assistant" and message_type == "text_result":
+        title = content.get("title", "")[:60] or "Video Summary"
+        cur.execute("UPDATE chats SET title=%s, updated_at=NOW() WHERE id=%s AND title='New Chat'", (title, chat_id))
+    elif role == "assistant" and message_type == "video_result":
+        cur.execute("UPDATE chats SET title='Video Summary', updated_at=NOW() WHERE id=%s AND title='New Chat'", (chat_id,))
+    else:
+        cur.execute("UPDATE chats SET updated_at=NOW() WHERE id=%s", (chat_id,))
+    conn.close()
 
 
 # ── Training state ─────────────────────────────────────────────────────────────
@@ -264,23 +345,25 @@ def summarize():
     if not _allowed(file.filename):
         return jsonify({"error": "Only .mp4 files are allowed"}), 400
 
+    chat_id = request.form.get("chat_id")
+
     saved_name = _unique_name(file.filename)
     input_path = os.path.join(UPLOAD_FOLDER, saved_name)
     file.save(input_path)
 
-    # Check file size
     size_mb = os.path.getsize(input_path) / (1024 * 1024)
     if size_mb > MAX_UPLOAD_MB:
         os.remove(input_path)
         return jsonify({"error": f"File too large ({size_mb:.0f} MB, max {MAX_UPLOAD_MB} MB)"}), 400
+
+    if chat_id:
+        _save_message(int(chat_id), "user", {"filename": file.filename, "size": file.size}, "upload")
 
     try:
         result = subprocess.run(
             [sys.executable, SUMMARIZER_SCRIPT, input_path],
             capture_output=True, text=True, check=True, cwd=BASE_DIR,
         )
-        if result.stderr:
-            print("STDERR:", result.stderr)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": "Summarization failed", "stderr": e.stderr}), 500
     finally:
@@ -292,6 +375,9 @@ def summarize():
 
     if not os.path.exists(output_path):
         return jsonify({"error": "Output file not found"}), 500
+
+    if chat_id:
+        _save_message(int(chat_id), "assistant", {"type": "video_summary"}, "video_result")
 
     return send_file(
         output_path,
@@ -314,15 +400,19 @@ def text_summarize():
     if not _allowed(file.filename):
         return jsonify({"error": "Only .mp4 files are allowed"}), 400
 
+    chat_id = request.form.get("chat_id")
+
     saved_name = _unique_name(file.filename)
     input_path = os.path.join(UPLOAD_FOLDER, saved_name)
     file.save(input_path)
 
-    # Check file size
     size_mb = os.path.getsize(input_path) / (1024 * 1024)
     if size_mb > MAX_UPLOAD_MB:
         os.remove(input_path)
         return jsonify({"error": f"File too large ({size_mb:.0f} MB, max {MAX_UPLOAD_MB} MB)"}), 400
+
+    if chat_id:
+        _save_message(int(chat_id), "user", {"filename": file.filename}, "upload")
 
     try:
         result = subprocess.run(
@@ -340,6 +430,9 @@ def text_summarize():
     except json.JSONDecodeError:
         return jsonify({"error": "Model output was not valid JSON", "raw": result.stdout}), 500
 
+    if chat_id:
+        _save_message(int(chat_id), "assistant", data, "text_result")
+
     return jsonify(data)
 
 
@@ -353,6 +446,10 @@ def url_summarize():
 
     url = data["url"].strip()
     mode = data.get("mode", "text")  # "text" or "video"
+    chat_id = data.get("chat_id")
+
+    if chat_id:
+        _save_message(int(chat_id), "user", {"url": url}, "url")
 
     # Download video with yt-dlp
     import uuid as _uuid
@@ -391,6 +488,9 @@ def url_summarize():
         if not os.path.exists(output_path):
             return jsonify({"error": "Output file not found"}), 500
 
+        if chat_id:
+            _save_message(int(chat_id), "assistant", {"type": "video_summary"}, "video_result")
+
         return send_file(output_path, as_attachment=True,
                          download_name="summary.mp4", mimetype="video/mp4")
     else:
@@ -406,9 +506,14 @@ def url_summarize():
                 os.remove(input_path)
 
         try:
-            return jsonify(json.loads(result.stdout))
+            data = json.loads(result.stdout)
         except json.JSONDecodeError:
             return jsonify({"error": "Invalid JSON output", "raw": result.stdout}), 500
+
+        if chat_id:
+            _save_message(int(chat_id), "assistant", data, "text_result")
+
+        return jsonify(data)
 
 
 if __name__ == "__main__":

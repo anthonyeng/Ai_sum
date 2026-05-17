@@ -15,170 +15,64 @@
   </div>
   <div class="toast" id="toast"></div>
 
-  <div class="page">
+  <div class="app">
 
-    <header class="header">
-      <div class="logo-mark">VS</div>
-      <div class="header-text">
-        <h1 class="header-title">AI Video Summarizer</h1>
-        <p class="header-sub">Upload a file or paste a YouTube link</p>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">VS</div>
+        <div>
+          <div class="sidebar-title">Video Summarizer</div>
+          <div class="sidebar-sub">ML-powered analysis</div>
+        </div>
       </div>
-      <nav class="nav-tabs">
-        <button class="nav-tab active" id="tabSummarize" onclick="switchTab('summarize')">Summarize</button>
-        <button class="nav-tab" id="tabTrain" onclick="switchTab('train')">Training</button>
-      </nav>
-    </header>
+      <button class="new-chat-btn" onclick="newChat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Chat
+      </button>
+      <div class="chat-list" id="chatList"></div>
+    </aside>
 
-    <!-- ═══════════════════════════════════════════ SUMMARIZE TAB -->
-    <div id="viewSummarize">
+    <!-- Main -->
+    <div class="main">
 
-      <!-- Input mode toggle -->
-      <div class="input-toggle">
-        <button class="toggle-btn active" id="toggleFile" onclick="setInputMode('file')">Upload File</button>
-        <button class="toggle-btn" id="toggleUrl" onclick="setInputMode('url')">YouTube URL</button>
+      <!-- Chat messages -->
+      <div class="chat-area" id="chatArea">
+        <div class="chat-empty" id="chatEmpty">
+          <div class="chat-empty-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </div>
+          <div class="chat-empty-text">Upload a video or paste a YouTube URL</div>
+          <div class="chat-empty-sub">Get a video summary or text analysis</div>
+        </div>
       </div>
 
-      <!-- FILE INPUT -->
-      <div class="card" id="fileInputCard">
-        <label class="drop-zone" id="dropZone" for="videoInput">
-          <input type="file" id="videoInput" accept="video/mp4" hidden />
-          <div class="dz-body">
-            <div class="dz-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-bar-inner">
+          <div id="fileTag" class="input-file-tag hidden">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span id="fileTagName"></span>
+            <button onclick="clearFile()">&times;</button>
+          </div>
+          <div class="input-row">
+            <div class="input-wrap">
+              <button class="input-file-btn" id="fileBtn" onclick="document.getElementById('videoInput').click()" title="Upload video">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </button>
+              <input type="file" id="videoInput" accept="video/mp4" hidden />
+              <input type="text" class="input-field" id="urlInput" placeholder="Paste YouTube URL or upload a file..." />
             </div>
-            <p class="dz-title">Drop your video here</p>
-            <p class="dz-sub">MP4 only, max 500 MB</p>
-          </div>
-          <div class="file-info" id="fileInfo" hidden>
-            <div class="file-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-            </div>
-            <div class="file-details">
-              <span class="file-name" id="fileName"></span>
-              <span class="file-meta" id="fileMeta"></span>
-            </div>
-            <button class="file-clear" id="clearBtn" type="button">&#x2715;</button>
-          </div>
-        </label>
-      </div>
-
-      <!-- URL INPUT -->
-      <div class="card hidden" id="urlInputCard">
-        <div class="url-input-wrap">
-          <svg class="url-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29.94 29.94 0 0 0 1 12a29.94 29.94 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2A29.94 29.94 0 0 0 23 12a29.94 29.94 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/></svg>
-          <input type="text" class="url-input" id="urlInput" placeholder="Paste YouTube URL here..." />
-        </div>
-        <div class="url-hint">e.g. https://www.youtube.com/watch?v=...</div>
-      </div>
-
-      <!-- Actions -->
-      <div class="actions">
-        <button class="btn btn-video" id="videoBtn" type="button" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          Video Summary
-        </button>
-        <button class="btn btn-text" id="textBtn" type="button" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
-          Text Summary
-        </button>
-      </div>
-
-      <div class="status-bar">
-        <span class="status-dot" id="statusDot"></span>
-        <span class="status-msg" id="statusMsg">Idle</span>
-      </div>
-
-      <!-- Results -->
-      <div id="resultArea" class="result-area hidden">
-        <div id="videoResult" class="card result-card hidden">
-          <div class="result-header">
-            <span class="result-tag tag-video">Video</span>
-            <h2 class="result-title">Video Summary</h2>
-          </div>
-          <video id="videoPlayer" class="video-player" controls></video>
-          <button class="btn btn-download" id="downloadBtn" type="button">Download Summary</button>
-        </div>
-
-        <div id="textResult" class="card result-card hidden">
-          <div class="result-header">
-            <span class="result-tag tag-text">Text</span>
-            <h2 class="result-title" id="schemaTitle"></h2>
-          </div>
-          <section class="schema-section">
-            <div class="schema-label">Summary</div>
-            <p class="schema-summary" id="schemaSummary"></p>
-          </section>
-          <section class="schema-section hidden" id="transcriptSection">
-            <div class="schema-label">Transcript</div>
-            <p class="schema-summary" id="schemaTranscript" style="max-height:180px;overflow-y:auto;font-size:0.85em;opacity:0.85"></p>
-          </section>
-          <section class="schema-section">
-            <div class="schema-label">Stats</div>
-            <div class="stats-row" id="statsRow"></div>
-          </section>
-          <details class="json-details">
-            <summary>View Raw JSON</summary>
-            <pre class="json-pre" id="jsonRaw"></pre>
-          </details>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════ TRAINING TAB -->
-    <div id="viewTrain" class="hidden">
-      <div class="card train-card">
-        <div class="train-step-header">
-          <div class="step-badge">Step 1</div>
-          <div>
-            <div class="train-step-title">Build Dataset</div>
-            <div class="train-step-sub">Extract ResNet18 features from MSR-VTT videos</div>
-          </div>
-          <div class="train-step-actions">
-            <button class="btn btn-start" id="startDatasetBtn" onclick="startPhase('dataset')">Run</button>
-            <button class="btn btn-stop hidden" id="stopDatasetBtn" onclick="stopJob()">Stop</button>
+            <button class="action-btn video-btn" id="videoBtn" disabled onclick="doSummarize('video')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              Video
+            </button>
+            <button class="action-btn text-btn" id="textBtn" disabled onclick="doSummarize('text')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+              Text
+            </button>
           </div>
         </div>
-        <div class="train-progress-wrap">
-          <div class="train-progress-meta"><span id="datasetProgressLabel">Waiting...</span><span id="datasetProgressPct">0%</span></div>
-          <div class="progress-track"><div class="progress-fill fill-blue" id="datasetFill" style="width:0%"></div></div>
-          <div class="train-meta-row"><span class="meta-chip" id="datasetSpeed"></span><span class="meta-chip" id="datasetEta"></span></div>
-        </div>
-      </div>
-
-      <div class="card train-card">
-        <div class="train-step-header">
-          <div class="step-badge step-badge-purple">Step 2</div>
-          <div>
-            <div class="train-step-title">Train Caption Model</div>
-            <div class="train-step-sub">BiGRU + Attention + LSTM &mdash; 30 epochs</div>
-          </div>
-          <div class="train-step-actions">
-            <button class="btn btn-start btn-purple" id="startModelBtn" onclick="startPhase('model')">Run</button>
-            <button class="btn btn-stop hidden" id="stopModelBtn" onclick="stopJob()">Stop</button>
-          </div>
-        </div>
-        <div class="train-progress-wrap">
-          <div class="train-progress-meta"><span id="modelProgressLabel">Waiting...</span><span id="modelProgressPct">0%</span></div>
-          <div class="progress-track"><div class="progress-fill fill-purple" id="modelFill" style="width:0%"></div></div>
-          <div class="metrics-row">
-            <div class="metric-box"><div class="metric-val" id="mTrainLoss">&mdash;</div><div class="metric-label">Train Loss</div></div>
-            <div class="metric-box"><div class="metric-val" id="mValLoss">&mdash;</div><div class="metric-label">Val Loss</div></div>
-            <div class="metric-box"><div class="metric-val" id="mBleu">&mdash;</div><div class="metric-label">BLEU-4</div></div>
-            <div class="metric-box"><div class="metric-val" id="mEpoch">&mdash;</div><div class="metric-label">Epoch</div></div>
-          </div>
-          <div class="chart-wrap"><div class="chart-label">Loss over epochs</div><canvas id="lossChart" width="660" height="160"></canvas></div>
-        </div>
-      </div>
-
-      <div class="card train-card">
-        <div class="log-header">
-          <span class="schema-label" style="margin:0">Console</span>
-          <div style="display:flex;gap:8px">
-            <button class="log-clear-btn" onclick="resetJob()" style="color:var(--red);border-color:rgba(248,113,113,0.25)">Reset</button>
-            <button class="log-clear-btn" onclick="document.getElementById('logBox').innerHTML=''">Clear</button>
-          </div>
-        </div>
-        <div class="log-box" id="logBox"></div>
       </div>
     </div>
 
@@ -186,133 +80,245 @@
 
   <script>
     const BASE = "";
-    const MAX_MB = 500;
-    let inputMode = "file"; // "file" or "url"
+    let currentChatId = null;
+    let selectedFile = null;
+    let busy = false;
 
-    function showToast(msg,type="error"){const t=document.getElementById("toast");t.textContent=msg;t.className=`toast toast-${type} active`;clearTimeout(t._timer);t._timer=setTimeout(()=>t.classList.remove("active"),4000)}
+    function showToast(m,t="error"){const e=document.getElementById("toast");e.textContent=m;e.className=`toast toast-${t} active`;clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("active"),3500)}
     function showSpinner(t,s){document.getElementById("spinnerText").textContent=t;document.getElementById("spinnerSub").textContent=s||"";document.getElementById("spinnerOverlay").classList.add("active")}
     function hideSpinner(){document.getElementById("spinnerOverlay").classList.remove("active")}
 
-    // ── Input mode toggle ───────────────────────────────────────────────────
-    function setInputMode(mode) {
-      inputMode = mode;
-      document.getElementById("toggleFile").classList.toggle("active", mode === "file");
-      document.getElementById("toggleUrl").classList.toggle("active", mode === "url");
-      document.getElementById("fileInputCard").classList.toggle("hidden", mode !== "file");
-      document.getElementById("urlInputCard").classList.toggle("hidden", mode !== "url");
-      updateButtons();
+    // ── File handling ──────────────────────────────────────────────────────
+    document.getElementById("videoInput").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".mp4")) { showToast("Only .mp4 files"); return; }
+      if (f.size > 500*1024*1024) { showToast("Max 500 MB"); return; }
+      selectedFile = f;
+      document.getElementById("fileTagName").textContent = f.name;
+      document.getElementById("fileTag").classList.remove("hidden");
+      document.getElementById("fileBtn").classList.add("has-file");
+      updateBtns();
+    });
+
+    function clearFile() {
+      selectedFile = null;
+      document.getElementById("videoInput").value = "";
+      document.getElementById("fileTag").classList.add("hidden");
+      document.getElementById("fileBtn").classList.remove("has-file");
+      updateBtns();
     }
 
-    function updateButtons() {
-      if (inputMode === "file") {
-        const hasFile = !!selectedFile;
-        videoBtn.disabled = !hasFile || busy;
-        textBtn.disabled = !hasFile || busy;
+    document.getElementById("urlInput").addEventListener("input", updateBtns);
+
+    function updateBtns() {
+      const hasInput = selectedFile || document.getElementById("urlInput").value.trim().length > 5;
+      document.getElementById("videoBtn").disabled = !hasInput || busy;
+      document.getElementById("textBtn").disabled = !hasInput || busy;
+    }
+
+    // ── Chat CRUD ──────────────────────────────────────────────────────────
+    async function loadChats() {
+      try {
+        const r = await fetch(`${BASE}/chats`);
+        const chats = await r.json();
+        const list = document.getElementById("chatList");
+        list.innerHTML = "";
+        chats.forEach(c => {
+          const el = document.createElement("div");
+          el.className = `chat-item${c.id === currentChatId ? " active" : ""}`;
+          el.innerHTML = `
+            <div class="chat-item-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+            <div class="chat-item-text">
+              <div class="chat-item-title">${esc(c.title)}</div>
+              <div class="chat-item-date">${new Date(c.created_at).toLocaleDateString()}</div>
+            </div>
+            <button class="chat-item-delete" onclick="event.stopPropagation();deleteChat(${c.id})">&times;</button>
+          `;
+          el.onclick = () => openChat(c.id);
+          list.appendChild(el);
+        });
+      } catch {}
+    }
+
+    async function newChat() {
+      try {
+        const r = await fetch(`${BASE}/chats`, { method: "POST" });
+        const c = await r.json();
+        currentChatId = c.id;
+        await loadChats();
+        renderMessages([]);
+      } catch { showToast("Failed to create chat"); }
+    }
+
+    async function openChat(id) {
+      currentChatId = id;
+      await loadChats();
+      try {
+        const r = await fetch(`${BASE}/chats/${id}`);
+        const data = await r.json();
+        renderMessages(data.messages || []);
+      } catch { showToast("Failed to load chat"); }
+    }
+
+    async function deleteChat(id) {
+      try {
+        await fetch(`${BASE}/chats/${id}`, { method: "DELETE" });
+        if (currentChatId === id) { currentChatId = null; renderMessages([]); }
+        await loadChats();
+      } catch { showToast("Failed to delete"); }
+    }
+
+    // ── Render messages ────────────────────────────────────────────────────
+    function renderMessages(messages) {
+      const area = document.getElementById("chatArea");
+      const empty = document.getElementById("chatEmpty");
+      if (!messages.length) {
+        area.innerHTML = "";
+        area.appendChild(empty);
+        empty.classList.remove("hidden");
+        return;
+      }
+      empty.classList.add("hidden");
+      area.innerHTML = "";
+      messages.forEach(m => {
+        if (m.role === "user") area.appendChild(renderUserMsg(m));
+        else area.appendChild(renderAIMsg(m));
+      });
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function renderUserMsg(m) {
+      const d = document.createElement("div");
+      d.className = "msg";
+      const c = m.content || {};
+      let body = "";
+      if (c.filename) body = `<div class="msg-file"><span class="msg-file-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></span><span class="msg-file-name">${esc(c.filename)}</span></div>`;
+      else if (c.url) body = `<div class="msg-content"><p>${esc(c.url)}</p></div>`;
+      d.innerHTML = `<div class="msg-avatar user">You</div><div class="msg-body"><div class="msg-label">You</div>${body}</div>`;
+      return d;
+    }
+
+    function renderAIMsg(m) {
+      const d = document.createElement("div");
+      d.className = "msg";
+      const c = m.content || {};
+      let body = "";
+
+      if (m.message_type === "text_result") {
+        let sections = `<p>${esc(c.summary || "")}</p>`;
+        if (c.transcript) sections += `<div class="summary-section"><div class="summary-section-label">Transcript</div><div class="summary-transcript">${esc(c.transcript)}</div></div>`;
+        if (c.stats) sections += `<div class="summary-stats">${Object.entries(c.stats).map(([k,v])=>`<div class="summary-stat"><div class="summary-stat-val">${v}</div><div class="summary-stat-label">${k.replace(/_/g," ")}</div></div>`).join("")}</div>`;
+        sections += `<details class="summary-json"><summary>View JSON</summary><pre>${esc(JSON.stringify(c,null,2))}</pre></details>`;
+        body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag text">Text</span><span class="summary-title">${esc(c.title || "Summary")}</span></div><div class="summary-body">${sections}</div></div>`;
+      } else if (m.message_type === "video_result") {
+        body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag video">Video</span><span class="summary-title">Video Summary</span></div><div class="summary-body"><p>Video summary generated successfully.</p></div></div>`;
       } else {
-        const hasUrl = urlInput.value.trim().length > 5;
-        videoBtn.disabled = !hasUrl || busy;
-        textBtn.disabled = !hasUrl || busy;
+        body = `<div class="msg-content"><p>${esc(c.text || JSON.stringify(c))}</p></div>`;
+      }
+
+      d.innerHTML = `<div class="msg-avatar ai">AI</div><div class="msg-body"><div class="msg-label">AI Video Summarizer</div>${body}</div>`;
+      return d;
+    }
+
+    function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+    // ── Summarize ──────────────────────────────────────────────────────────
+    async function doSummarize(mode) {
+      if (busy) return;
+      const url = document.getElementById("urlInput").value.trim();
+      if (!selectedFile && url.length < 5) return;
+
+      // Create chat if needed
+      if (!currentChatId) await newChat();
+
+      busy = true;
+      updateBtns();
+      const isUrl = !selectedFile && url.length > 5;
+      showSpinner(mode === "video" ? "Generating video summary..." : "Analyzing video...",
+        isUrl ? "Downloading from YouTube..." : "Processing uploaded file...");
+
+      // Add user message
+      const userContent = isUrl ? { url } : { filename: selectedFile.name, size: selectedFile.size };
+      addMsgToUI("user", userContent);
+
+      try {
+        let res;
+        if (isUrl) {
+          res = await fetch(`${BASE}/url-summarize`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url, mode, chat_id: currentChatId }),
+          });
+        } else {
+          const form = new FormData();
+          form.append("video", selectedFile);
+          form.append("chat_id", currentChatId);
+          const endpoint = mode === "video" ? "/summarize" : "/text-summarize";
+          res = await fetch(`${BASE}${endpoint}`, { method: "POST", body: form });
+        }
+
+        if (mode === "video" && res.ok) {
+          const blob = await res.blob();
+          const objUrl = URL.createObjectURL(blob);
+          addVideoResultToUI(objUrl);
+          showToast("Video summary ready!", "success");
+        } else if (mode === "text") {
+          const data = await res.json();
+          if (!res.ok) { showToast(data.error || "Failed"); }
+          else { addTextResultToUI(data); showToast("Text summary ready!", "success"); }
+        } else if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          showToast(d.error || "Failed");
+        }
+      } catch (err) { showToast(err.message); }
+      finally {
+        hideSpinner();
+        busy = false;
+        updateBtns();
+        clearFile();
+        document.getElementById("urlInput").value = "";
+        loadChats();
       }
     }
 
-    // ── Tab switching ─────────────────────────────────────────────────────────
-    function switchTab(tab){
-      document.getElementById("viewSummarize").classList.toggle("hidden",tab!=="summarize");
-      document.getElementById("viewTrain").classList.toggle("hidden",tab!=="train");
-      document.getElementById("tabSummarize").classList.toggle("active",tab==="summarize");
-      document.getElementById("tabTrain").classList.toggle("active",tab==="train");
-      if(tab==="train"){checkFiles();startPolling();}
+    function addMsgToUI(role, content) {
+      const area = document.getElementById("chatArea");
+      document.getElementById("chatEmpty").classList.add("hidden");
+      const m = { role, content, message_type: role === "user" ? "input" : "result" };
+      area.appendChild(role === "user" ? renderUserMsg(m) : renderAIMsg(m));
+      area.scrollTop = area.scrollHeight;
     }
 
-    async function checkFiles(){try{const r=await fetch(`${BASE}/train/files`);if(!r.ok)return;const f=await r.json();if(f.dataset||f.vocab)markStepDone("dataset");if(f.model)markStepDone("model")}catch{}}
-    function markStepDone(p){if(p==="dataset"){document.getElementById("datasetProgressLabel").textContent="Complete";document.getElementById("datasetProgressPct").textContent="100%";document.getElementById("datasetFill").style.width="100%"}if(p==="model"){document.getElementById("modelProgressLabel").textContent="Complete";document.getElementById("modelProgressPct").textContent="100%";document.getElementById("modelFill").style.width="100%";document.getElementById("mEpoch").textContent="done"}}
-
-    // ── File handling ─────────────────────────────────────────────────────────
-    const videoInput=document.getElementById("videoInput"),dropZone=document.getElementById("dropZone"),fileInfo=document.getElementById("fileInfo"),fileName=document.getElementById("fileName"),fileMeta=document.getElementById("fileMeta"),clearBtn=document.getElementById("clearBtn"),videoBtn=document.getElementById("videoBtn"),textBtn=document.getElementById("textBtn"),statusDot=document.getElementById("statusDot"),statusMsg=document.getElementById("statusMsg"),resultArea=document.getElementById("resultArea"),videoResult=document.getElementById("videoResult"),textResult=document.getElementById("textResult"),videoPlayer=document.getElementById("videoPlayer"),downloadBtn=document.getElementById("downloadBtn"),urlInput=document.getElementById("urlInput");
-
-    let selectedFile=null,busy=false,videoObjectUrl=null;
-
-    function fmtBytes(b){const u=["B","KB","MB","GB"],i=Math.floor(Math.log(b)/Math.log(1024));return`${(b/1024**i).toFixed(1)} ${u[i]}`}
-    function setStatus(msg,type="idle"){statusMsg.textContent=msg;statusDot.dataset.type=type}
-    function setFile(file){if(!file){clearFile();return}if(!file.name.toLowerCase().endsWith(".mp4")){showToast("Only .mp4 files");return}if(file.size>MAX_MB*1024*1024){showToast("File too large");return}selectedFile=file;fileName.textContent=file.name;fileMeta.textContent=fmtBytes(file.size);fileInfo.hidden=false;dropZone.querySelector(".dz-body").hidden=true;updateButtons();setStatus("Ready","ready")}
-    function clearFile(){selectedFile=null;videoInput.value="";fileInfo.hidden=true;dropZone.querySelector(".dz-body").hidden=false;updateButtons();setStatus("Idle","idle")}
-    dropZone.addEventListener("dragover",e=>{e.preventDefault();if(!busy)dropZone.classList.add("drag-over")});
-    dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("drag-over"));
-    dropZone.addEventListener("drop",e=>{e.preventDefault();dropZone.classList.remove("drag-over");if(!busy)setFile(e.dataTransfer?.files?.[0]??null)});
-    videoInput.addEventListener("change",()=>setFile(videoInput.files?.[0]??null));
-    clearBtn.addEventListener("click",e=>{e.preventDefault();if(!busy)clearFile()});
-    urlInput.addEventListener("input", updateButtons);
-
-    function setBusy(f){busy=f;updateButtons()}
-
-    // ── Video summary ─────────────────────────────────────────────────────────
-    videoBtn.addEventListener("click", async()=>{
-      if(busy)return;
-      setBusy(true);setStatus("Processing...","loading");
-      showSpinner("Generating video summary...", inputMode==="url"?"Downloading + processing":"Extracting features");
-      resultArea.classList.add("hidden");videoResult.classList.add("hidden");textResult.classList.add("hidden");
-      if(videoObjectUrl){URL.revokeObjectURL(videoObjectUrl);videoObjectUrl=null}
-      try{
-        let res;
-        if(inputMode==="url"){
-          res=await fetch(`${BASE}/url-summarize`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:urlInput.value.trim(),mode:"video"})});
-        }else{
-          const form=new FormData();form.append("video",selectedFile);
-          res=await fetch(`${BASE}/summarize`,{method:"POST",body:form});
-        }
-        if(!res.ok){const d=await res.json().catch(()=>({}));showToast(d.error||"Failed");setStatus("Error","error");return}
-        const blob=await res.blob();videoObjectUrl=URL.createObjectURL(blob);videoPlayer.src=videoObjectUrl;
-        downloadBtn.onclick=()=>{const a=document.createElement("a");a.href=videoObjectUrl;a.download="summary.mp4";a.click()};
-        videoResult.classList.remove("hidden");resultArea.classList.remove("hidden");
-        setStatus("Done","success");showToast("Video summary ready!","success");
-      }catch(err){showToast(err.message);setStatus("Failed","error")}
-      finally{hideSpinner();setBusy(false)}
-    });
-
-    // ── Text summary ──────────────────────────────────────────────────────────
-    textBtn.addEventListener("click", async()=>{
-      if(busy)return;
-      setBusy(true);setStatus("Processing...","loading");
-      showSpinner("Analyzing video...", inputMode==="url"?"Downloading + transcribing":"Running ML pipeline");
-      resultArea.classList.add("hidden");videoResult.classList.add("hidden");textResult.classList.add("hidden");
-      try{
-        let res;
-        if(inputMode==="url"){
-          res=await fetch(`${BASE}/url-summarize`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:urlInput.value.trim(),mode:"text"})});
-        }else{
-          const form=new FormData();form.append("video",selectedFile);
-          res=await fetch(`${BASE}/text-summarize`,{method:"POST",body:form});
-        }
-        const data=await res.json();
-        if(!res.ok){showToast(data.error||"Failed");setStatus("Error","error");return}
-        renderSchema(data);
-        textResult.classList.remove("hidden");resultArea.classList.remove("hidden");
-        setStatus("Done","success");showToast("Text summary ready!","success");
-      }catch(err){showToast(err.message);setStatus("Failed","error")}
-      finally{hideSpinner();setBusy(false)}
-    });
-
-    function renderSchema(data){
-      document.getElementById("schemaTitle").textContent=data.title||"Summary";
-      document.getElementById("schemaSummary").textContent=data.summary||"—";
-      const tSec=document.getElementById("transcriptSection"),tEl=document.getElementById("schemaTranscript");
-      if(data.transcript){tEl.textContent=data.transcript;tSec.classList.remove("hidden")}else{tSec.classList.add("hidden")}
-      const stats=data.stats||{},row=document.getElementById("statsRow");row.innerHTML="";
-      [["Scenes",stats.scene_count??"—"],["Duration",(stats.duration_analyzed_sec??null)!=null?stats.duration_analyzed_sec+"s":"—"],["Seg/sec",stats.segments_per_sec??"—"]].forEach(([l,v])=>{
-        const s=document.createElement("div");s.className="stat-chip";s.innerHTML=`<span class="stat-val">${v}</span><span class="stat-label">${l}</span>`;row.appendChild(s)});
-      document.getElementById("jsonRaw").textContent=JSON.stringify(data,null,2);
+    function addTextResultToUI(data) {
+      const area = document.getElementById("chatArea");
+      const m = { role: "assistant", content: data, message_type: "text_result" };
+      area.appendChild(renderAIMsg(m));
+      area.scrollTop = area.scrollHeight;
     }
-    function escHtml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 
-    // ── Training ──────────────────────────────────────────────────────────────
-    let pollTimer=null,chartHistory=[];
-    function startPolling(){if(pollTimer)return;pollTimer=setInterval(fetchStatus,1200);fetchStatus()}
-    async function fetchStatus(){try{const r=await fetch(`${BASE}/train/status`);if(!r.ok)return;updateTrainUI(await r.json())}catch{}}
-    function updateTrainUI(s){const phase=s.phase,running=s.running,done=s.done,progress=s.progress||0,total=s.total||0,pct=total>0?Math.round(progress/total*100):0;const isD=phase==="dataset",isM=phase==="model";if(isD||phase===null){document.getElementById("startDatasetBtn").classList.toggle("hidden",running&&isD);document.getElementById("stopDatasetBtn").classList.toggle("hidden",!(running&&isD));if(isD){document.getElementById("datasetProgressLabel").textContent=done?"Complete":running?`${progress.toLocaleString()}/${total.toLocaleString()}`:"Waiting...";document.getElementById("datasetProgressPct").textContent=done?"100%":`${pct}%`;document.getElementById("datasetFill").style.width=done?"100%":`${pct}%`;document.getElementById("datasetSpeed").textContent=s.speed||"";document.getElementById("datasetEta").textContent=s.eta?`ETA ${s.eta}`:""}}if(isM||phase===null){document.getElementById("startModelBtn").classList.toggle("hidden",running&&isM);document.getElementById("stopModelBtn").classList.toggle("hidden",!(running&&isM));if(isM){document.getElementById("modelProgressLabel").textContent=done?"Complete":running&&total>0?`Epoch ${progress}/${total}`:"Waiting...";document.getElementById("modelProgressPct").textContent=done?"100%":`${pct}%`;document.getElementById("modelFill").style.width=done?"100%":`${pct}%`;if(s.train_loss!=null)document.getElementById("mTrainLoss").textContent=s.train_loss.toFixed(4);if(s.val_loss!=null)document.getElementById("mValLoss").textContent=s.val_loss.toFixed(4);if(s.bleu!=null)document.getElementById("mBleu").textContent=s.bleu.toFixed(4);if(s.epoch!=null)document.getElementById("mEpoch").textContent=`${s.epoch}/${s.epochs}`;if(s.history&&s.history.length!==chartHistory.length){chartHistory=s.history;drawChart(chartHistory)}}}const logBox=document.getElementById("logBox");if(s.log&&s.log.length>0){logBox.innerHTML=s.log.map(l=>`<div class="log-line">${escHtml(l)}</div>`).join("");logBox.scrollTop=logBox.scrollHeight}}
-    async function startPhase(p){try{const r=await fetch(`${BASE}/train/start/${p}`,{method:"POST"});const d=await r.json();if(!r.ok){showToast(d.error);return}startPolling();showToast("Started!","success")}catch(e){showToast("Server unreachable")}}
-    async function stopJob(){try{await fetch(`${BASE}/train/stop`,{method:"POST"});showToast("Stopped","success")}catch{}}
-    async function resetJob(){try{await fetch(`${BASE}/train/reset`,{method:"POST"});chartHistory=[];document.getElementById("logBox").innerHTML="";["datasetProgressLabel","modelProgressLabel"].forEach(id=>document.getElementById(id).textContent="Waiting...");["datasetProgressPct","modelProgressPct"].forEach(id=>document.getElementById(id).textContent="0%");["datasetFill","modelFill"].forEach(id=>document.getElementById(id).style.width="0%");["startDatasetBtn","startModelBtn"].forEach(id=>document.getElementById(id).classList.remove("hidden"));["stopDatasetBtn","stopModelBtn"].forEach(id=>document.getElementById(id).classList.add("hidden"));showToast("Reset","success")}catch(e){showToast("Failed")}}
-    function drawChart(h){const c=document.getElementById("lossChart"),ctx=c.getContext("2d"),dpr=window.devicePixelRatio||1;c.width=c.offsetWidth*dpr;c.height=160*dpr;ctx.scale(dpr,dpr);const W=c.offsetWidth,H=160,pad={top:20,right:16,bottom:32,left:48};ctx.clearRect(0,0,W,H);if(!h.length)return;const tL=h.map(x=>x.train_loss),vL=h.map(x=>x.val_loss),all=[...tL,...vL],minY=Math.min(...all)*0.95,maxY=Math.max(...all)*1.05,ep=h.length;function xP(i){return pad.left+(i/Math.max(ep-1,1))*(W-pad.left-pad.right)}function yP(v){return pad.top+(1-(v-minY)/(maxY-minY))*(H-pad.top-pad.bottom)}ctx.strokeStyle="rgba(255,255,255,0.04)";ctx.lineWidth=1;for(let i=0;i<=4;i++){const y=pad.top+(i/4)*(H-pad.top-pad.bottom);ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();ctx.fillStyle="rgba(255,255,255,0.25)";ctx.font="10px Inter,sans-serif";ctx.textAlign="right";ctx.fillText((maxY-(i/4)*(maxY-minY)).toFixed(2),pad.left-6,y+4)}function dl(vals,col){const g=ctx.createLinearGradient(0,pad.top,0,H-pad.bottom);g.addColorStop(0,col+"15");g.addColorStop(1,"transparent");ctx.beginPath();vals.forEach((v,i)=>{i===0?ctx.moveTo(xP(i),yP(v)):ctx.lineTo(xP(i),yP(v))});ctx.lineTo(xP(vals.length-1),H-pad.bottom);ctx.lineTo(xP(0),H-pad.bottom);ctx.closePath();ctx.fillStyle=g;ctx.fill();ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineJoin="round";vals.forEach((v,i)=>{i===0?ctx.moveTo(xP(i),yP(v)):ctx.lineTo(xP(i),yP(v))});ctx.stroke();const lx=xP(vals.length-1),ly=yP(vals[vals.length-1]);ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.beginPath();ctx.arc(lx,ly,2,0,Math.PI*2);ctx.fillStyle="#fff";ctx.fill()}dl(tL,"#8b5cf6");dl(vL,"#22d3ee");ctx.font="11px Inter,sans-serif";ctx.textAlign="left";ctx.fillStyle="#8b5cf6";ctx.fillRect(pad.left,pad.top-8,12,3);ctx.fillStyle="rgba(255,255,255,0.45)";ctx.fillText("Train",pad.left+16,pad.top-3);ctx.fillStyle="#22d3ee";ctx.fillRect(pad.left+70,pad.top-8,12,3);ctx.fillStyle="rgba(255,255,255,0.45)";ctx.fillText("Val",pad.left+86,pad.top-3)}
+    function addVideoResultToUI(objUrl) {
+      const area = document.getElementById("chatArea");
+      const d = document.createElement("div");
+      d.className = "msg";
+      d.innerHTML = `
+        <div class="msg-avatar ai">AI</div>
+        <div class="msg-body">
+          <div class="msg-label">AI Video Summarizer</div>
+          <div class="summary-card">
+            <div class="summary-header"><span class="summary-tag video">Video</span><span class="summary-title">Video Summary</span></div>
+            <div class="summary-body">
+              <video class="video-player" controls src="${objUrl}"></video>
+              <button class="btn-download" onclick="(()=>{const a=document.createElement('a');a.href='${objUrl}';a.download='summary.mp4';a.click()})()">Download Summary</button>
+            </div>
+          </div>
+        </div>`;
+      area.appendChild(d);
+      area.scrollTop = area.scrollHeight;
+    }
+
+    // ── Init ────────────────────────────────────────────────────────────────
+    loadChats();
   </script>
 </body>
 </html>
