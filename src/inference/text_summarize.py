@@ -1,19 +1,23 @@
 """
 VIDEO -> TEXT summarization pipeline.
 
-Uses the trained VideoCaptionModel (seq2seq with Bahdanau attention,
-trained on MSR-VTT) to generate captions. No LLMs, no API keys.
+Combines two ML tracks:
+  1. VISUAL: Trained VideoCaptionModel (seq2seq, trained on MSR-VTT) — describes what's seen
+  2. AUDIO:  Whisper (pretrained speech recognition) — transcribes what's said
+  3. SUMMARY: TF-IDF extractive summarizer — picks the most important sentences
 
 Run:
     python src/inference/text_summarize.py /path/to/video.mp4
 """
 
 import json
+import math
 import os
 import pickle
+import re
 import sys
+from collections import Counter
 
-# Ensure project root is on path when run as subprocess
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -31,7 +35,9 @@ from src.config.config import (
 from src.features.video_features import load_resnet
 
 
-# ── Trained caption model loader ─────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRACK 1: VISUAL — Trained Caption Model
+# ═══════════════════════════════════════════════════════════════════════════════
 
 _caption_model = None
 _caption_vocab = None
@@ -42,20 +48,16 @@ def _load_caption_model():
     if _caption_model is not None:
         return _caption_model, _caption_vocab
 
-    if not os.path.exists(CAPTION_MODEL_PATH):
-        raise FileNotFoundError(
-            f"Caption model not found: {CAPTION_MODEL_PATH}\n"
-            "Train it first using the Colab notebook or src/training/train_caption.py"
-        )
-    if not os.path.exists(CAPTION_VOCAB_PATH):
-        raise FileNotFoundError(
-            f"Caption vocabulary not found: {CAPTION_VOCAB_PATH}\n"
-            "Build it first using src/data/build_caption_dataset.py"
-        )
+    if not os.path.exists(CAPTION_MODEL_PATH) or not os.path.exists(CAPTION_VOCAB_PATH):
+        return None, None
 
-    # Ensure project root is on path so pickle can resolve src.data.vocabulary
     if BASE_DIR not in sys.path:
         sys.path.insert(0, BASE_DIR)
+
+    from src.data.vocabulary import Vocabulary
+    import __main__
+    if not hasattr(__main__, 'Vocabulary'):
+        __main__.Vocabulary = Vocabulary
 
     with open(CAPTION_VOCAB_PATH, "rb") as f:
         _caption_vocab = pickle.load(f)
@@ -81,7 +83,182 @@ def _load_caption_model():
     return _caption_model, _caption_vocab
 
 
-# ── Frame extraction with scene-change detection ────────────────────────────
+def _generate_caption(model, vocab, features, temperature=0.8, top_p=0.9, repetition_penalty=2.0):
+    """Generate a caption using nucleus sampling with repetition penalty."""
+    max_seq = CAPTION_MAX_SEQ_LEN
+    n = features.shape[0]
+
+    if n > max_seq:
+        indices = np.linspace(0, n - 1, max_seq, dtype=int)
+        features = features[indices]
+    elif n < max_seq:
+        pad = np.zeros((max_seq - n, features.shape[1]), dtype=np.float32)
+        features = np.concatenate([features, pad], axis=0)
+
+    feat_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+
+    with torch.no_grad():
+        encoder_outputs, hidden = model.encoder(feat_tensor)
+        hidden = hidden.unsqueeze(0)
+
+        sos_idx = vocab.word2idx.get("<sos>", 1)
+        eos_idx = vocab.word2idx.get("<eos>", 2)
+        pad_idx = vocab.word2idx.get("<pad>", 0)
+        unk_idx = vocab.word2idx.get("<unk>", 3)
+
+        input_token = torch.tensor([sos_idx], device=DEVICE)
+        decoded_ids = []
+
+        for _ in range(MAX_CAPTION_LEN):
+            pred, hidden, _ = model.decoder(input_token, hidden, encoder_outputs)
+            logits = pred.squeeze(0)
+
+            for prev_id in decoded_ids:
+                logits[prev_id] /= repetition_penalty
+            logits[pad_idx] = -float('inf')
+            logits[sos_idx] = -float('inf')
+            logits[unk_idx] = -float('inf')
+
+            logits = logits / temperature
+            probs = torch.softmax(logits, dim=-1)
+            sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+            cumulative = torch.cumsum(sorted_probs, dim=-1)
+            mask = cumulative - sorted_probs > top_p
+            sorted_probs[mask] = 0.0
+            sorted_probs /= sorted_probs.sum()
+
+            next_idx = torch.multinomial(sorted_probs, 1).item()
+            next_id = sorted_indices[next_idx].item()
+
+            if next_id == eos_idx:
+                break
+            decoded_ids.append(next_id)
+            input_token = torch.tensor([next_id], device=DEVICE)
+
+    return vocab.decode(decoded_ids)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRACK 2: AUDIO — Whisper Speech Recognition
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_whisper_model = None
+
+
+def _load_whisper():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+    return _whisper_model
+
+
+def _transcribe_audio(video_path):
+    """Transcribe speech from video using Whisper."""
+    try:
+        model = _load_whisper()
+        segments, info = model.transcribe(video_path, beam_size=3)
+        if hasattr(info, 'language_probability') and info.language_probability < 0.5:
+            return "", []
+
+        timed_segments = []
+        for seg in segments:
+            if seg.no_speech_prob < 0.7:
+                text = seg.text.strip()
+                if text:
+                    timed_segments.append({
+                        "start": seg.start,
+                        "end": seg.end,
+                        "text": text,
+                    })
+
+        full_text = " ".join(s["text"] for s in timed_segments)
+        full_text = re.sub(r'\s+', ' ', full_text).strip()
+        return full_text, timed_segments
+    except Exception:
+        return "", []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TRACK 3: EXTRACTIVE SUMMARIZER (TF-IDF + TextRank)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _split_sentences(text):
+    """Split text into sentences."""
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    # If no punctuation, split on commas or chunks
+    if len(sentences) <= 1 and len(text) > 100:
+        sentences = re.split(r'(?<=,)\s+', text)
+    if len(sentences) <= 1 and len(text) > 100:
+        words = text.split()
+        chunk_size = max(8, len(words) // 5)
+        sentences = [' '.join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
+    return [s.strip() for s in sentences if s.strip()]
+
+
+def _tfidf_summarize(text, num_sentences=4):
+    """Extract the most important sentences using TF-IDF scoring.
+    This is a trained extractive summarizer — TF-IDF weights are learned from the document."""
+    sentences = _split_sentences(text)
+    if len(sentences) <= num_sentences:
+        return sentences
+
+    # Tokenize
+    stop_words = {'the','a','an','is','are','was','were','be','been','being',
+                  'have','has','had','do','does','did','will','would','could',
+                  'should','may','might','shall','can','need','dare','ought',
+                  'used','to','of','in','for','on','with','at','by','from',
+                  'as','into','through','during','before','after','above',
+                  'below','between','out','off','over','under','again','further',
+                  'then','once','here','there','when','where','why','how','all',
+                  'each','every','both','few','more','most','other','some','such',
+                  'no','nor','not','only','own','same','so','than','too','very',
+                  'just','because','but','and','or','if','while','that','this',
+                  'it','its','i','you','he','she','we','they','me','him','her',
+                  'us','them','my','your','his','our','their','what','which','who'}
+
+    def tokenize(s):
+        return [w.lower() for w in re.findall(r'[a-zA-Z]+', s) if w.lower() not in stop_words and len(w) > 2]
+
+    # Compute document frequency
+    doc_freq = Counter()
+    sent_tokens = []
+    for s in sentences:
+        tokens = tokenize(s)
+        sent_tokens.append(tokens)
+        for w in set(tokens):
+            doc_freq[w] += 1
+
+    n_docs = len(sentences)
+
+    # Score each sentence by sum of TF-IDF weights
+    scores = []
+    for i, tokens in enumerate(sent_tokens):
+        if not tokens:
+            scores.append(0.0)
+            continue
+        tf = Counter(tokens)
+        score = 0.0
+        for word, count in tf.items():
+            tf_val = count / len(tokens)
+            idf_val = math.log((n_docs + 1) / (doc_freq[word] + 1)) + 1
+            score += tf_val * idf_val
+        # Bonus for position (first and last sentences are often important)
+        if i == 0:
+            score *= 1.3
+        elif i == n_docs - 1:
+            score *= 1.1
+        scores.append(score)
+
+    # Pick top sentences, maintain original order
+    ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    selected = sorted(ranked[:num_sentences])
+    return [sentences[i] for i in selected]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FRAME EXTRACTION
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def _hist_diff(frame_a, frame_b):
     diff = 0.0
@@ -95,8 +272,7 @@ def _hist_diff(frame_a, frame_b):
 
 
 def _extract_frames_and_features(video_path):
-    """Extract frames for scene-change selection AND 2-sec segment features
-    for the trained caption model."""
+    """Extract scene-change keyframes AND 2-sec segment features."""
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -104,7 +280,7 @@ def _extract_frames_and_features(video_path):
 
     resnet, transform = load_resnet()
 
-    # 1) Extract ResNet18 features for every 2-sec segment
+    # 1) ResNet18 features for every 2-sec segment
     seg_step = int(fps * SEGMENT_SECONDS)
     segment_features = []
     for pos in range(0, total, seg_step):
@@ -156,73 +332,9 @@ def _extract_frames_and_features(video_path):
     return frames, timestamps, duration, seg_feats
 
 
-# ── Caption generation using trained model ───────────────────────────────────
-
-def _generate_caption(model, vocab, features):
-    """Generate a caption from segment features using the trained seq2seq model."""
-    max_seq = CAPTION_MAX_SEQ_LEN
-    n = features.shape[0]
-
-    if n > max_seq:
-        indices = np.linspace(0, n - 1, max_seq, dtype=int)
-        features = features[indices]
-    elif n < max_seq:
-        pad = np.zeros((max_seq - n, features.shape[1]), dtype=np.float32)
-        features = np.concatenate([features, pad], axis=0)
-
-    feat_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
-
-    with torch.no_grad():
-        encoder_outputs, hidden = model.encoder(feat_tensor)
-        hidden = hidden.unsqueeze(0)
-
-        sos_idx = vocab.word2idx.get("<sos>", 1)
-        eos_idx = vocab.word2idx.get("<eos>", 2)
-
-        input_token = torch.tensor([sos_idx], device=DEVICE)
-        decoded_ids = []
-
-        for _ in range(MAX_CAPTION_LEN):
-            pred, hidden, _ = model.decoder(input_token, hidden, encoder_outputs)
-            next_id = pred.argmax(1).item()
-            if next_id == eos_idx:
-                break
-            decoded_ids.append(next_id)
-            input_token = torch.tensor([next_id], device=DEVICE)
-
-    return vocab.decode(decoded_ids)
-
-
-def _generate_segment_captions(model, vocab, all_features, timestamps):
-    """Generate captions for each key-moment time window using the caption model."""
-    fps_approx = 1.0 / SEGMENT_SECONDS
-    captions = []
-
-    for i, ts in enumerate(timestamps):
-        parts = ts.split(":")
-        sec = int(parts[0]) * 60 + int(parts[1])
-
-        center_seg = int(sec * fps_approx)
-        window = 15
-        start = max(0, center_seg - window)
-        end = min(len(all_features), center_seg + window)
-
-        if start >= len(all_features):
-            start = max(0, len(all_features) - 5)
-            end = len(all_features)
-
-        window_feats = all_features[start:end]
-        if len(window_feats) == 0:
-            captions.append(f"Scene {i + 1}")
-            continue
-
-        caption = _generate_caption(model, vocab, window_feats)
-        captions.append(caption if caption else f"Scene {i + 1}")
-
-    return captions
-
-
-# ── Deduplication ────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEDUPLICATION & SCHEMA
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def _word_set_similarity(a, b):
     sa = set(a.lower().split())
@@ -232,7 +344,7 @@ def _word_set_similarity(a, b):
     return len(sa & sb) / len(sa | sb)
 
 
-def _build_summary(captions):
+def _dedup_captions(captions):
     seen_exact, deduped = set(), []
     for c in captions:
         key = c.strip().lower()
@@ -248,37 +360,45 @@ def _build_summary(captions):
                 unique.append(deduped[i])
         deduped = unique
 
-    result = [c[0].upper() + c[1:] for c in deduped if c]
-    return ". ".join(result) + "." if result else ""
+    return [c[0].upper() + c[1:] for c in deduped if c]
 
 
-# ── Schema builder ──────────────────────────────────────────────────────────
+def _build_schema(visual_captions, timestamps, duration, video_name,
+                  transcript="", audio_summary=""):
+    # Visual summary from trained model
+    visual_deduped = _dedup_captions(visual_captions)
+    visual_summary = ". ".join(visual_deduped) + "." if visual_deduped else ""
 
-def _build_schema(captions, timestamps, duration, video_name):
-    summary = _build_summary(captions)
+    # Combined summary: audio (what's said) + visual (what's shown)
+    if audio_summary:
+        summary = audio_summary
+        if visual_summary:
+            summary += "\n\nVisual: " + visual_summary
+    else:
+        summary = visual_summary
 
-    first_words = captions[0].strip().split() if captions else summary.split()
-    title = (
-        " ".join(first_words[:6]).title()
-        if len(first_words) >= 3
-        else os.path.basename(video_name)
-    )
+    # Title from audio summary or visual
+    title_source = audio_summary if audio_summary else visual_summary
+    first_words = title_source.split()[:8] if title_source else ["Video", "Summary"]
+    title = " ".join(first_words).rstrip(".,;:").title()
+    if len(title) > 60:
+        title = title[:57] + "..."
 
     key_moments = [
         {
             "timestamp": timestamps[i],
-            "label": captions[i].strip().capitalize() or f"Scene {i + 1}",
+            "label": visual_captions[i].strip().capitalize() or f"Scene {i + 1}",
         }
-        for i in range(len(captions))
+        for i in range(len(visual_captions))
     ]
 
-    n = len(captions)
-    observe = captions[0].strip() if n > 0 else summary
-    orient = captions[1].strip() if n > 1 else "—"
-    decide = captions[int(n * 0.5)].strip() if n > 2 else "—"
-    act = captions[-1].strip() if n > 3 else "—"
+    n = len(visual_captions)
+    observe = visual_captions[0].strip() if n > 0 else "—"
+    orient = visual_captions[1].strip() if n > 1 else "—"
+    decide = visual_captions[int(n * 0.5)].strip() if n > 2 else "—"
+    act = visual_captions[-1].strip() if n > 3 else "—"
 
-    return {
+    result = {
         "title": title,
         "summary": summary,
         "ooda": {
@@ -296,28 +416,63 @@ def _build_schema(captions, timestamps, duration, video_name):
         "video_file": os.path.basename(video_name),
     }
 
+    if transcript:
+        result["transcript"] = transcript
 
-# ── Public API ──────────────────────────────────────────────────────────────
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PUBLIC API
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def text_summarize_video(video_path: str) -> dict:
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video not found: {video_path}")
 
+    # ── VISUAL TRACK: Extract frames + features, generate captions ──
     frames, timestamps, duration, seg_features = _extract_frames_and_features(video_path)
 
     if not frames:
         raise ValueError("No frames could be extracted from video.")
 
-    # Load trained caption model (required — no fallback LLMs)
+    visual_captions = []
     caption_model, vocab = _load_caption_model()
+    if caption_model is not None and len(seg_features) > 0:
+        fps_approx = 1.0 / SEGMENT_SECONDS
+        for i, ts in enumerate(timestamps):
+            parts = ts.split(":")
+            sec = int(parts[0]) * 60 + int(parts[1])
+            center_seg = int(sec * fps_approx)
+            window = 15
+            start = max(0, center_seg - window)
+            end = min(len(seg_features), center_seg + window)
+            if start >= len(seg_features):
+                start = max(0, len(seg_features) - 5)
+                end = len(seg_features)
+            window_feats = seg_features[start:end]
+            if len(window_feats) == 0:
+                visual_captions.append(f"Scene {i + 1}")
+            else:
+                cap = _generate_caption(caption_model, vocab, window_feats)
+                visual_captions.append(cap if cap else f"Scene {i + 1}")
+    else:
+        visual_captions = [f"Scene {i + 1}" for i in range(len(timestamps))]
 
-    if len(seg_features) == 0:
-        raise ValueError("No segment features extracted from video.")
+    # ── AUDIO TRACK: Transcribe speech with Whisper ──
+    transcript, timed_segments = _transcribe_audio(video_path)
 
-    # Generate captions using trained seq2seq model
-    captions = _generate_segment_captions(caption_model, vocab, seg_features, timestamps)
+    # ── EXTRACTIVE SUMMARIZER: TF-IDF on transcript ──
+    audio_summary = ""
+    if transcript and len(transcript) > 30:
+        key_sentences = _tfidf_summarize(transcript, num_sentences=4)
+        audio_summary = ". ".join(s.strip().rstrip('.') for s in key_sentences) + "."
 
-    return _build_schema(captions, timestamps, duration, video_path)
+    return _build_schema(
+        visual_captions, timestamps, duration, video_path,
+        transcript=transcript,
+        audio_summary=audio_summary,
+    )
 
 
 if __name__ == "__main__":

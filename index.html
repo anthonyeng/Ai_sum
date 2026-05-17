@@ -138,6 +138,10 @@
             <div class="schema-label">Summary</div>
             <p class="schema-summary" id="schemaSummary"></p>
           </section>
+          <section class="schema-section hidden" id="transcriptSection">
+            <div class="schema-label">Transcript</div>
+            <p class="schema-summary" id="schemaTranscript" style="max-height:180px;overflow-y:auto;font-size:0.85em;opacity:0.85"></p>
+          </section>
           <section class="schema-section">
             <div class="schema-label">OODA Analysis</div>
             <div class="ooda-grid">
@@ -430,6 +434,8 @@
     function renderSchema(data) {
       document.getElementById("schemaTitle").textContent = data.title||"Summary";
       document.getElementById("schemaSummary").textContent = data.summary||"No summary generated";
+      const tSec=document.getElementById("transcriptSection"), tEl=document.getElementById("schemaTranscript");
+      if(data.transcript){tEl.textContent=data.transcript;tSec.classList.remove("hidden");}else{tSec.classList.add("hidden");}
       const ooda=data.ooda||{};
       document.getElementById("oodaObserve").textContent=ooda.observe||"—";
       document.getElementById("oodaOrient").textContent=ooda.orient||"—";
