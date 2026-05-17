@@ -14,6 +14,11 @@ import shutil
 import subprocess
 from typing import List, Tuple
 
+# Ensure project root is on path when run as subprocess
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 import cv2
 import joblib
 import numpy as np
