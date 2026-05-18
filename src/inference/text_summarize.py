@@ -1,10 +1,11 @@
 """
 VIDEO -> TEXT summarization pipeline.
 
-Combines two ML tracks:
-  1. VISUAL: Trained VideoCaptionModel (seq2seq, trained on MSR-VTT) — describes what's seen
-  2. AUDIO:  Whisper (pretrained speech recognition) — transcribes what's said
-  3. SUMMARY: TF-IDF extractive summarizer — picks the most important sentences
+Combines multiple ML tracks:
+  1. VISUAL:  Trained VideoCaptionModel (seq2seq, trained on MSR-VTT) — describes what's seen
+  2. AUDIO:   Whisper (pretrained speech recognition) — transcribes what's said
+  3. SUMMARY: Sentence-BERT + MMR semantic summarizer (primary)
+             TF-IDF extractive summarizer (baseline fallback)
 
 Run:
     python src/inference/text_summarize.py /path/to/video.mp4
@@ -612,10 +613,32 @@ def text_summarize_video(video_path: str) -> dict:
     # ── AUDIO TRACK: Transcribe speech with Whisper ──
     transcript, timed_segments = _transcribe_audio(video_path)
 
-    # ── EXTRACTIVE SUMMARIZER: TF-IDF on transcript ──
+    # ── EXTRACTIVE SUMMARIZER: Sentence-BERT + MMR (primary), TF-IDF (fallback) ──
     audio_summary = ""
+    summarization_method = "none"
     if transcript and len(transcript) > 30:
-        key_sentences = _tfidf_summarize(transcript, num_sentences=5)
+        # Build timestamped chunks from Whisper segments
+        if timed_segments:
+            chunks = [{"text": s["text"], "start": s["start"], "end": s["end"]}
+                      for s in timed_segments if len(s["text"].split()) >= 3]
+        else:
+            # Fallback: split transcript into sentence chunks
+            sents = _split_sentences(transcript)
+            chunks = [{"text": s, "start": 0.0, "end": 0.0} for s in sents]
+
+        if chunks:
+            try:
+                from src.summarization.sbert_mmr import sbert_mmr_summarize
+                sbert_result = sbert_mmr_summarize(chunks, num_sentences=5, lambda_param=0.7)
+                key_sentences = [c["text"] for c in sbert_result["selected_chunks"]]
+                summarization_method = "sbert_mmr"
+            except Exception:
+                key_sentences = _tfidf_summarize(transcript, num_sentences=5)
+                summarization_method = "tfidf_fallback"
+        else:
+            key_sentences = _tfidf_summarize(transcript, num_sentences=5)
+            summarization_method = "tfidf_fallback"
+
         audio_summary = _format_professional_summary(key_sentences, transcript)
 
     result = _build_schema(
@@ -628,6 +651,7 @@ def text_summarize_video(video_path: str) -> dict:
     result["metrics"] = _compute_metrics(
         transcript, result.get("summary", ""), seg_features, visual_captions
     )
+    result["metrics"]["summarization_method"] = summarization_method
 
     return result
 

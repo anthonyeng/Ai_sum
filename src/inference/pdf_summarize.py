@@ -1,8 +1,8 @@
 """
 PDF -> TEXT summarization pipeline.
 
-Extracts text from PDF, then uses TF-IDF extractive summarizer
-to produce a professional summary.
+Extracts text from PDF, then uses Sentence-BERT + MMR semantic summarizer
+(with TF-IDF as fallback) to produce a professional summary.
 
 Run:
     python src/inference/pdf_summarize.py /path/to/file.pdf
@@ -228,7 +228,22 @@ def pdf_summarize(pdf_path: str) -> dict:
     if not full_text or len(full_text) < 50:
         raise ValueError("Could not extract text from PDF.")
 
-    key_sentences = _tfidf_summarize(full_text, num_sentences=8)
+    # Sentence-BERT + MMR (primary), TF-IDF (fallback)
+    pdf_sentences = _split_sentences(full_text)
+    chunks = [{"text": s, "start": 0.0, "end": 0.0} for s in pdf_sentences if len(s.split()) >= 3]
+
+    summarization_method = "tfidf"
+    if chunks:
+        try:
+            from src.summarization.sbert_mmr import sbert_mmr_summarize
+            sbert_result = sbert_mmr_summarize(chunks, num_sentences=8, lambda_param=0.7)
+            key_sentences = [c["text"] for c in sbert_result["selected_chunks"]]
+            summarization_method = "sbert_mmr"
+        except Exception:
+            key_sentences = _tfidf_summarize(full_text, num_sentences=8)
+    else:
+        key_sentences = _tfidf_summarize(full_text, num_sentences=8)
+
     summary = _format_summary(key_sentences, full_text, num_pages)
 
     # Title: detect topics from text
@@ -270,6 +285,7 @@ def pdf_summarize(pdf_path: str) -> dict:
     metrics["keyword_coverage"] = round(covered / max(len(top_20), 1), 3)
     metrics["key_points_extracted"] = len(key_sentences)
     metrics["total_sentences"] = len(_split_sentences(full_text))
+    metrics["summarization_method"] = summarization_method
 
     return {
         "title": title,
