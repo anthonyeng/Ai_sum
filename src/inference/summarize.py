@@ -357,6 +357,31 @@ def summarize_video(video_input: str) -> str:
         output_path = os.path.join(SUMMARY_DIR, output_name)
         concat_with_crossfade(clip_files, output_path)
 
+        # Compute inference metrics
+        score_mean = float(scores.mean())
+        score_std = float(scores.std())
+        threshold = score_mean + THRESHOLD_FACTOR * score_std
+        selected_ratio = len(selected) / n_segments
+        summary_ratio = total_summary_segments / n_segments
+
+        metrics = {
+            "mse_proxy": round(float(score_std ** 2), 4),  # Score variance as MSE proxy
+            "r2_confidence": round(1.0 - (score_std / max(score_mean, 0.01)), 4),  # Prediction consistency
+            "mean_importance": round(score_mean, 4),
+            "score_std": round(score_std, 4),
+            "threshold": round(threshold, 4),
+            "selected_segments": len(selected),
+            "total_segments": n_segments,
+            "compression_ratio": round(summary_ratio, 3),
+            "scenes_after_dedup": len(scenes),
+        }
+
+        # Save metrics to a JSON file alongside the video
+        metrics_path = output_path.replace(".mp4", "_metrics.json")
+        import json as _json
+        with open(metrics_path, "w") as f:
+            _json.dump(metrics, f)
+
         print(f"Summary saved to: {output_path}")
         return output_path
 

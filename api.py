@@ -316,6 +316,16 @@ def styles():
     return send_file(os.path.join(BASE_DIR, "styles.css"))
 
 
+# ── Video download ────────────────────────────────────────────────────────────
+
+@app.route("/download/<filename>")
+def download_video(filename):
+    path = os.path.join(OUTPUT_FOLDER, filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    return send_file(path, as_attachment=True, download_name=filename, mimetype="video/mp4")
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 
 @app.route("/health", methods=["GET"])
@@ -378,8 +388,19 @@ def summarize():
     if not os.path.exists(output_path):
         return jsonify({"error": "Output file not found"}), 500
 
+    # Load metrics if available
+    metrics_path = output_path.replace(".mp4", "_metrics.json")
+    video_metrics = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path) as mf:
+            video_metrics = json.load(mf)
+
     if chat_id:
-        _save_message(int(chat_id), "assistant", {"type": "video_summary"}, "video_result")
+        _save_message(int(chat_id), "assistant", {"type": "video_summary", "metrics": video_metrics}, "video_result")
+
+    # Check if client wants JSON (metrics) or file
+    if request.args.get("format") == "json":
+        return jsonify({"video_url": f"/download/{output_name}", "metrics": video_metrics})
 
     return send_file(
         output_path,
