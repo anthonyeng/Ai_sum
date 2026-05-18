@@ -30,6 +30,7 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs", "summaries")
 SUMMARIZER_SCRIPT = os.path.join(BASE_DIR, "src", "inference", "summarize.py")
 TEXT_SCRIPT = os.path.join(BASE_DIR, "src", "inference", "text_summarize.py")
+PDF_SCRIPT = os.path.join(BASE_DIR, "src", "inference", "pdf_summarize.py")
 DATASET_SCRIPT = os.path.join(BASE_DIR, "src", "data", "build_caption_dataset.py")
 TRAIN_SCRIPT = os.path.join(BASE_DIR, "src", "training", "train_caption.py")
 
@@ -40,7 +41,8 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
 def _allowed(filename):
-    return os.path.splitext(filename)[1].lower() == ".mp4"
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in (".mp4", ".pdf")
 
 
 def _unique_name(filename):
@@ -432,6 +434,50 @@ def text_summarize():
 
     if chat_id:
         _save_message(int(chat_id), "assistant", data, "text_result")
+
+    return jsonify(data)
+
+
+# ── PDF summary ──────────────────────────────────────────────────────────────
+
+@app.route("/pdf-summarize", methods=["POST"])
+def pdf_summarize():
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"error": "Empty filename"}), 400
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Only .pdf files are allowed"}), 400
+
+    chat_id = request.form.get("chat_id")
+
+    saved_name = _unique_name(file.filename)
+    input_path = os.path.join(UPLOAD_FOLDER, saved_name)
+    file.save(input_path)
+
+    if chat_id:
+        _save_message(int(chat_id), "user", {"filename": file.filename, "type": "pdf"}, "upload")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, PDF_SCRIPT, input_path],
+            capture_output=True, text=True, check=True, cwd=BASE_DIR,
+        )
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": "PDF summarization failed", "stderr": e.stderr}), 500
+    finally:
+        if os.path.exists(input_path):
+            os.remove(input_path)
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid output", "raw": result.stdout}), 500
+
+    if chat_id:
+        _save_message(int(chat_id), "assistant", data, "pdf_result")
 
     return jsonify(data)
 

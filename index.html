@@ -60,7 +60,7 @@
               <button class="input-file-btn" id="fileBtn" onclick="document.getElementById('videoInput').click()" title="Upload video">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               </button>
-              <input type="file" id="videoInput" accept="video/mp4" hidden />
+              <input type="file" id="videoInput" accept="video/mp4,.pdf" hidden />
               <input type="text" class="input-field" id="urlInput" placeholder="Paste YouTube URL or upload a file..." />
             </div>
             <button class="action-btn video-btn" id="videoBtn" disabled onclick="doSummarize('video')">
@@ -70,6 +70,10 @@
             <button class="action-btn text-btn" id="textBtn" disabled onclick="doSummarize('text')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
               Text
+            </button>
+            <button class="action-btn pdf-btn" id="pdfBtn" disabled onclick="doSummarize('pdf')" style="background:#e65100;display:none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              PDF
             </button>
           </div>
         </div>
@@ -92,12 +96,18 @@
     document.getElementById("videoInput").addEventListener("change", e => {
       const f = e.target.files[0];
       if (!f) return;
-      if (!f.name.toLowerCase().endsWith(".mp4")) { showToast("Only .mp4 files"); return; }
+      const ext = f.name.toLowerCase().split('.').pop();
+      if (!["mp4","pdf"].includes(ext)) { showToast("Only .mp4 or .pdf files"); return; }
       if (f.size > 500*1024*1024) { showToast("Max 500 MB"); return; }
       selectedFile = f;
       document.getElementById("fileTagName").textContent = f.name;
       document.getElementById("fileTag").classList.remove("hidden");
       document.getElementById("fileBtn").classList.add("has-file");
+      // Show PDF button for PDFs, hide video/text buttons
+      const isPdf = f.name.toLowerCase().endsWith(".pdf");
+      document.getElementById("videoBtn").style.display = isPdf ? "none" : "flex";
+      document.getElementById("textBtn").style.display = isPdf ? "none" : "flex";
+      document.getElementById("pdfBtn").style.display = isPdf ? "flex" : "none";
       updateBtns();
     });
 
@@ -106,6 +116,9 @@
       document.getElementById("videoInput").value = "";
       document.getElementById("fileTag").classList.add("hidden");
       document.getElementById("fileBtn").classList.remove("has-file");
+      document.getElementById("videoBtn").style.display = "flex";
+      document.getElementById("textBtn").style.display = "flex";
+      document.getElementById("pdfBtn").style.display = "none";
       updateBtns();
     }
 
@@ -115,6 +128,7 @@
       const hasInput = selectedFile || document.getElementById("urlInput").value.trim().length > 5;
       document.getElementById("videoBtn").disabled = !hasInput || busy;
       document.getElementById("textBtn").disabled = !hasInput || busy;
+      document.getElementById("pdfBtn").disabled = !hasInput || busy;
     }
 
     // ── Chat CRUD ──────────────────────────────────────────────────────────
@@ -244,7 +258,12 @@
 
       try {
         let res;
-        if (isUrl) {
+        if (mode === "pdf" && selectedFile) {
+          const form = new FormData();
+          form.append("file", selectedFile);
+          form.append("chat_id", currentChatId);
+          res = await fetch(`${BASE}/pdf-summarize`, { method: "POST", body: form });
+        } else if (isUrl) {
           res = await fetch(`${BASE}/url-summarize`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -258,7 +277,11 @@
           res = await fetch(`${BASE}${endpoint}`, { method: "POST", body: form });
         }
 
-        if (mode === "video" && res.ok) {
+        if (mode === "pdf") {
+          const data = await res.json();
+          if (!res.ok) { showToast(data.error || "Failed"); }
+          else { addTextResultToUI({...data, transcript: data.full_text}); showToast("PDF summary ready!", "success"); }
+        } else if (mode === "video" && res.ok) {
           const blob = await res.blob();
           const objUrl = URL.createObjectURL(blob);
           addVideoResultToUI(objUrl);

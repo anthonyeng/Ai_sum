@@ -392,6 +392,59 @@ def _word_set_similarity(a, b):
     return len(sa & sb) / len(sa | sb)
 
 
+def _format_professional_summary(key_sentences, full_transcript):
+    """Format extracted sentences into a professional structured summary."""
+    # Clean up sentences
+    cleaned = []
+    for s in key_sentences:
+        s = s.strip()
+        if not s:
+            continue
+        # Ensure starts with capital
+        s = s[0].upper() + s[1:]
+        # Ensure ends with period
+        if not s.endswith(('.', '!', '?')):
+            s += '.'
+        cleaned.append(s)
+
+    if not cleaned:
+        return ""
+
+    # Detect the main topic from most frequent content words
+    stop = {'the','a','an','is','are','was','were','be','been','have','has','had',
+            'do','does','did','will','would','could','should','can','may','might',
+            'to','of','in','for','on','with','at','by','from','as','and','or','but',
+            'not','no','so','if','this','that','it','its','we','you','they','he','she',
+            'our','your','their','my','his','her','about','also','just','very','more',
+            'all','some','any','than','then','now','when','what','which','who','how',
+            'been','being','into','through','during','before','after','between','each',
+            'there','here','where','while','only','other','these','those','such','like',
+            'going','really','actually','basically','well','know','called','said','get'}
+    words = [w.lower() for w in re.findall(r'[a-zA-Z]+', full_transcript) if w.lower() not in stop and len(w) > 3]
+    freq = Counter(words)
+    top_topics = [w for w, _ in freq.most_common(5)]
+    topic_phrase = ", ".join(top_topics[:3]) if top_topics else "the subject"
+
+    # Build structured summary
+    parts = []
+
+    # Opening: topic statement
+    parts.append(f"This video covers {topic_phrase}.")
+
+    # Key points from extracted sentences (the meat)
+    parts.append("Key points discussed include: " + " ".join(cleaned[:3]))
+
+    # Additional detail if available
+    if len(cleaned) > 3:
+        parts.append(" ".join(cleaned[3:]))
+
+    # Duration context
+    word_count = len(full_transcript.split())
+    parts.append(f"The video contains approximately {word_count} words of spoken content.")
+
+    return " ".join(parts)
+
+
 def _dedup_captions(captions):
     seen_exact, deduped = set(), []
     for c in captions:
@@ -513,8 +566,8 @@ def text_summarize_video(video_path: str) -> dict:
     # ── EXTRACTIVE SUMMARIZER: TF-IDF on transcript ──
     audio_summary = ""
     if transcript and len(transcript) > 30:
-        key_sentences = _tfidf_summarize(transcript, num_sentences=4)
-        audio_summary = ". ".join(s.strip().rstrip('.') for s in key_sentences) + "."
+        key_sentences = _tfidf_summarize(transcript, num_sentences=5)
+        audio_summary = _format_professional_summary(key_sentences, transcript)
 
     return _build_schema(
         visual_captions, timestamps, duration, video_path,
