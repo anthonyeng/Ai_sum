@@ -114,15 +114,24 @@ def _tfidf_summarize(text, num_sentences=5):
 
 
 def _format_summary(key_sentences, full_text, num_pages):
-    """Format into professional summary."""
+    """Format into a professional structured summary."""
     cleaned = []
     for s in key_sentences:
         s = s.strip()
         if not s:
             continue
+        # Clean up bullet points and special chars
+        s = re.sub(r'^[\s\-\*\u2022]+', '', s)
+        s = re.sub(r'\s+', ' ', s).strip()
+        if len(s) < 10:
+            continue
         s = s[0].upper() + s[1:]
         if not s.endswith(('.', '!', '?')):
             s += '.'
+        # Truncate overly long sentences
+        words = s.split()
+        if len(words) > 35:
+            s = ' '.join(words[:35]) + '...'
         cleaned.append(s)
 
     if not cleaned:
@@ -137,22 +146,24 @@ def _format_summary(key_sentences, full_text, num_pages):
             'all','some','any','than','then','now','when','what','which','who','how',
             'been','being','into','through','during','before','after','between','each',
             'there','here','where','while','only','other','these','those','such','like',
-            'used','using','based','paper','study','results','however','thus','therefore'}
+            'used','using','based','paper','study','results','however','thus','therefore',
+            'chapter','example','given','make','made','image','objects','operations'}
     words = [w.lower() for w in re.findall(r'[a-zA-Z]+', full_text) if w.lower() not in stop and len(w) > 3]
     freq = Counter(words)
-    top_topics = [w for w, _ in freq.most_common(5)]
+    top_topics = [w.capitalize() for w, _ in freq.most_common(4)]
     topic_phrase = ", ".join(top_topics[:3]) if top_topics else "the subject"
 
-    parts = []
-    parts.append(f"This document covers {topic_phrase}.")
-    parts.append("Key points include: " + " ".join(cleaned[:3]))
-    if len(cleaned) > 3:
-        parts.append(" ".join(cleaned[3:]))
-
     word_count = len(full_text.split())
-    parts.append(f"The document spans {num_pages} pages with approximately {word_count} words.")
 
-    return " ".join(parts)
+    # Build structured summary with clear sections
+    lines = []
+    lines.append(f"Overview: This document ({num_pages} pages, ~{word_count:,} words) covers {topic_phrase}.")
+    lines.append("")
+    lines.append("Key Points:")
+    for i, s in enumerate(cleaned[:5], 1):
+        lines.append(f"  {i}. {s}")
+
+    return "\n".join(lines)
 
 
 def pdf_summarize(pdf_path: str) -> dict:

@@ -219,8 +219,9 @@
       const c = m.content || {};
       let body = "";
 
-      if (m.message_type === "text_result") {
-        let sections = `<p>${esc(c.summary || "")}</p>`;
+      if (m.message_type === "text_result" || m.message_type === "pdf_result") {
+        const summaryHtml = esc(c.summary || "").replace(/\n/g, "<br>");
+        let sections = `<div style="white-space:pre-line">${summaryHtml}</div>`;
         if (c.transcript) sections += `<div class="summary-section"><div class="summary-section-label">Transcript</div><div class="summary-transcript">${esc(c.transcript)}</div></div>`;
         if (c.stats) sections += `<div class="summary-stats">${Object.entries(c.stats).map(([k,v])=>`<div class="summary-stat"><div class="summary-stat-val">${v}</div><div class="summary-stat-label">${k.replace(/_/g," ")}</div></div>`).join("")}</div>`;
         sections += `<details class="summary-json"><summary>View JSON</summary><pre>${esc(JSON.stringify(c,null,2))}</pre></details>`;

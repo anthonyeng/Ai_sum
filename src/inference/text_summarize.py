@@ -394,23 +394,25 @@ def _word_set_similarity(a, b):
 
 def _format_professional_summary(key_sentences, full_transcript):
     """Format extracted sentences into a professional structured summary."""
-    # Clean up sentences
     cleaned = []
     for s in key_sentences:
         s = s.strip()
         if not s:
             continue
-        # Ensure starts with capital
+        s = re.sub(r'\s+', ' ', s).strip()
+        if len(s) < 10:
+            continue
         s = s[0].upper() + s[1:]
-        # Ensure ends with period
         if not s.endswith(('.', '!', '?')):
             s += '.'
+        words = s.split()
+        if len(words) > 35:
+            s = ' '.join(words[:35]) + '...'
         cleaned.append(s)
 
     if not cleaned:
         return ""
 
-    # Detect the main topic from most frequent content words
     stop = {'the','a','an','is','are','was','were','be','been','have','has','had',
             'do','does','did','will','would','could','should','can','may','might',
             'to','of','in','for','on','with','at','by','from','as','and','or','but',
@@ -419,30 +421,23 @@ def _format_professional_summary(key_sentences, full_transcript):
             'all','some','any','than','then','now','when','what','which','who','how',
             'been','being','into','through','during','before','after','between','each',
             'there','here','where','while','only','other','these','those','such','like',
-            'going','really','actually','basically','well','know','called','said','get'}
+            'going','really','actually','basically','well','know','called','said','get',
+            'decided','went','came','make','made','john','asked','started','lets','say'}
     words = [w.lower() for w in re.findall(r'[a-zA-Z]+', full_transcript) if w.lower() not in stop and len(w) > 3]
     freq = Counter(words)
-    top_topics = [w for w, _ in freq.most_common(5)]
+    top_topics = [w.capitalize() for w, _ in freq.most_common(4)]
     topic_phrase = ", ".join(top_topics[:3]) if top_topics else "the subject"
 
-    # Build structured summary
-    parts = []
-
-    # Opening: topic statement
-    parts.append(f"This video covers {topic_phrase}.")
-
-    # Key points from extracted sentences (the meat)
-    parts.append("Key points discussed include: " + " ".join(cleaned[:3]))
-
-    # Additional detail if available
-    if len(cleaned) > 3:
-        parts.append(" ".join(cleaned[3:]))
-
-    # Duration context
     word_count = len(full_transcript.split())
-    parts.append(f"The video contains approximately {word_count} words of spoken content.")
 
-    return " ".join(parts)
+    lines = []
+    lines.append(f"Overview: This video (~{word_count:,} words) covers {topic_phrase}.")
+    lines.append("")
+    lines.append("Key Points:")
+    for i, s in enumerate(cleaned[:5], 1):
+        lines.append(f"  {i}. {s}")
+
+    return "\n".join(lines)
 
 
 def _dedup_captions(captions):
