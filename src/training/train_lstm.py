@@ -196,6 +196,17 @@ def main():
     np.random.seed(RANDOM_SEED)
     random.seed(RANDOM_SEED)
 
+    from src.tracking.mlflow_utils import ExperimentTracker
+    tracker = ExperimentTracker("video_summarization")
+    tracker.start_run("bilstm", tags={"model_type": "bilstm", "dataset": "tvsum50"})
+    tracker.log_params({
+        "model": "BiLSTMSummarizer",
+        "hidden_dim": HIDDEN_DIM, "num_layers": NUM_LAYERS,
+        "dropout": DROPOUT, "lr": LR,
+        "epochs": EPOCHS, "batch_size": BATCH_SIZE,
+        "patience": PATIENCE, "seed": RANDOM_SEED,
+    })
+
     print("Loading annotations...")
     annotations = load_annotations()
 
@@ -252,6 +263,10 @@ def main():
             f"MSE: {val_mse:.4f} | MAE: {val_mae:.4f} | R2: {val_r2:.4f} | "
             f"LR: {lr:.6f}"
         )
+        tracker.log_metrics({
+            "train_loss": round(train_loss, 4), "val_loss": round(val_loss, 4),
+            "mse": round(val_mse, 4), "mae": round(val_mae, 4), "r2": round(val_r2, 4),
+        }, step=epoch)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -274,6 +289,10 @@ def main():
     print(f"MAE: {mae:.4f}")
     print(f"R2:  {r2:.4f}")
     print(f"\nModel saved to: {MODEL_OUT}")
+
+    tracker.log_metrics({"final_mse": round(mse, 4), "final_mae": round(mae, 4), "final_r2": round(r2, 4)})
+    tracker.log_model(MODEL_OUT)
+    tracker.end_run()
 
 
 if __name__ == "__main__":

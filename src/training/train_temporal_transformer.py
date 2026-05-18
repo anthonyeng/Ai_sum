@@ -240,6 +240,20 @@ def main():
     np.random.seed(RANDOM_SEED)
     random.seed(RANDOM_SEED)
 
+    # MLflow tracking
+    from src.tracking.mlflow_utils import ExperimentTracker
+    tracker = ExperimentTracker("video_summarization")
+    tracker.start_run("temporal_transformer", tags={"model_type": "transformer", "dataset": "tvsum50"})
+    tracker.log_params({
+        "model": "TemporalTransformer",
+        "d_model": D_MODEL, "nhead": NHEAD, "num_layers": NUM_LAYERS,
+        "dim_feedforward": DIM_FEEDFORWARD, "dropout": DROPOUT,
+        "lr": LR, "weight_decay": WEIGHT_DECAY,
+        "epochs": EPOCHS, "batch_size": BATCH_SIZE,
+        "patience": PATIENCE, "warmup_epochs": WARMUP_EPOCHS,
+        "seed": RANDOM_SEED,
+    })
+
     print("=" * 60)
     print("TEMPORAL TRANSFORMER — Video Importance Scoring")
     print("=" * 60)
@@ -315,6 +329,17 @@ def main():
             f"{val_spearman:8.4f} | {lr:10.6f}"
         )
 
+        # Log to MLflow
+        tracker.log_metrics({
+            "train_loss": round(train_loss, 4),
+            "val_loss": round(val_loss, 4),
+            "mse": round(val_mse, 4),
+            "mae": round(val_mae, 4),
+            "r2": round(val_r2, 4),
+            "spearman": round(val_spearman, 4),
+            "lr": lr,
+        }, step=epoch)
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             patience_counter = 0
@@ -360,6 +385,18 @@ def main():
     print(f"Spearman: {spearman:.4f}")
     print(f"Epoch:    {ckpt['epoch']}")
     print(f"\nModel saved to: {MODEL_OUT}")
+
+    # Log final metrics and model to MLflow
+    tracker.log_metrics({
+        "final_mse": round(mse, 4),
+        "final_mae": round(mae, 4),
+        "final_r2": round(r2, 4),
+        "final_spearman": round(spearman, 4),
+        "best_epoch": ckpt["epoch"],
+        "total_params": total_params,
+    })
+    tracker.log_model(MODEL_OUT)
+    tracker.end_run()
 
 
 if __name__ == "__main__":

@@ -160,6 +160,19 @@ def build_dataset(video_ids, feature_dir, annotations, temporal_radius=1):
 
 
 def main():
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    from src.tracking.mlflow_utils import ExperimentTracker
+    tracker = ExperimentTracker("video_summarization")
+    tracker.start_run("xgboost", tags={"model_type": "xgboost", "dataset": "tvsum50"})
+    tracker.log_params({
+        "model": "XGBRegressor",
+        "n_estimators": 400, "max_depth": 6, "learning_rate": 0.05,
+        "subsample": 0.8, "colsample_bytree": 0.8,
+        "temporal_radius": TEMPORAL_RADIUS, "seed": RANDOM_SEED,
+    })
+
     print("Loading annotations...")
     annotations = load_annotations()
 
@@ -235,6 +248,18 @@ def main():
     joblib.dump(model, MODEL_OUT)
 
     print(f"\nModel saved to: {MODEL_OUT}")
+
+    # Log to MLflow
+    tracker.log_metrics({
+        "final_mse": round(mse, 4),
+        "final_mae": round(mae, 4),
+        "final_r2": round(r2, 4),
+        "train_samples": X_train.shape[0],
+        "test_samples": X_test.shape[0],
+        "feature_dim": X_train.shape[1],
+    })
+    tracker.log_model(MODEL_OUT)
+    tracker.end_run()
 
 
 if __name__ == "__main__":
