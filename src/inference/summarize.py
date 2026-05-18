@@ -2,10 +2,16 @@
 VIDEO -> VIDEO summarization pipeline.
 
 Takes an input video, extracts ResNet18 features, predicts importance scores
-via XGBoost, selects key scenes, and produces a condensed summary video.
+via XGBoost (default) or Temporal Transformer, selects key scenes, and
+produces a condensed summary video.
+
+Models:
+  - XGBoost: classical ML baseline (default, fast)
+  - Temporal Transformer: deep learning with self-attention (if trained)
 
 Run:
     python src/inference/summarize.py <video_path>
+    python src/inference/summarize.py <video_path> --model transformer
 """
 
 import os
@@ -30,7 +36,10 @@ from src.config.config import (
     XGBOOST_MODEL_PATH, UPLOAD_DIR, TEMP_DIR, SUMMARY_DIR, DEVICE,
     SEGMENT_SECONDS, TEMPORAL_RADIUS, THRESHOLD_FACTOR, MAX_SUMMARY_RATIO,
     MIN_SUMMARY_SEGMENTS, CONTEXT_PAD, SIMILARITY_THRESHOLD, CROSSFADE_SECONDS,
+    MODEL_DIR,
 )
+
+TRANSFORMER_MODEL_PATH = os.path.join(MODEL_DIR, "temporal_transformer.pt")
 from src.features.video_features import (
     load_resnet, extract_feature_from_path, build_temporal_features,
 )
@@ -82,8 +91,59 @@ def extract_segment_frames(video_path: str, output_dir: str) -> List[List[str]]:
     return segments
 
 
-def extract_features_and_scores(video_path: str):
-    """Extract ResNet features and predict importance scores for each segment."""
+def _score_with_xgboost(raw_features: np.ndarray) -> np.ndarray:
+    """Score segments using XGBoost with temporal context features."""
+    if not os.path.exists(XGBOOST_MODEL_PATH):
+        raise FileNotFoundError(f"XGBoost model not found: {os.path.abspath(XGBOOST_MODEL_PATH)}")
+    model = joblib.load(XGBOOST_MODEL_PATH)
+    X = build_temporal_features(raw_features, radius=TEMPORAL_RADIUS)
+    return model.predict(X).astype(np.float32)
+
+
+def _score_with_transformer(raw_features: np.ndarray) -> np.ndarray:
+    """Score segments using the Temporal Transformer with self-attention."""
+    if not os.path.exists(TRANSFORMER_MODEL_PATH):
+        raise FileNotFoundError(
+            f"Transformer model not found: {os.path.abspath(TRANSFORMER_MODEL_PATH)}. "
+            f"Train it first: python src/training/train_temporal_transformer.py"
+        )
+
+    from src.models.temporal_transformer import TemporalTransformer
+
+    ckpt = torch.load(TRANSFORMER_MODEL_PATH, map_location=DEVICE, weights_only=False)
+    cfg = ckpt.get("config", {})
+
+    model = TemporalTransformer(
+        input_dim=cfg.get("input_dim", 512),
+        d_model=cfg.get("d_model", 256),
+        nhead=cfg.get("nhead", 8),
+        num_layers=cfg.get("num_layers", 4),
+        dim_feedforward=cfg.get("dim_feedforward", 512),
+        dropout=0.0,  # No dropout at inference
+    )
+    model.load_state_dict(ckpt["model_state"])
+    model.to(DEVICE)
+    model.eval()
+
+    feat_tensor = torch.tensor(raw_features, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+    mask = torch.ones(1, len(raw_features), dtype=torch.bool).to(DEVICE)
+
+    with torch.no_grad():
+        scores = model(feat_tensor, mask).squeeze(0).cpu().numpy()
+
+    # Rescale from [0,1] to roughly [1,5] to match XGBoost output range
+    scores = scores * 4.0 + 1.0
+    return scores.astype(np.float32)
+
+
+def extract_features_and_scores(video_path: str, scorer: str = "xgboost"):
+    """
+    Extract ResNet features and predict importance scores for each segment.
+
+    Args:
+        video_path: path to video file
+        scorer: "xgboost" (default) or "transformer"
+    """
     frames_dir = os.path.join(TEMP_DIR, "frames")
     clean_dir(frames_dir)
 
@@ -92,11 +152,7 @@ def extract_features_and_scores(video_path: str):
         if not frame_groups:
             raise ValueError("No segment frames extracted.")
 
-        if not os.path.exists(XGBOOST_MODEL_PATH):
-            raise FileNotFoundError(f"Model not found: {os.path.abspath(XGBOOST_MODEL_PATH)}")
-
         resnet, transform = load_resnet()
-        model = joblib.load(XGBOOST_MODEL_PATH)
 
         features = []
         for segment in frame_groups:
@@ -108,8 +164,12 @@ def extract_features_and_scores(video_path: str):
             raise ValueError("No features extracted from segments.")
 
         raw_features = np.array(features, dtype=np.float32)
-        X = build_temporal_features(raw_features, radius=TEMPORAL_RADIUS)
-        scores = model.predict(X).astype(np.float32)
+
+        if scorer == "transformer":
+            scores = _score_with_transformer(raw_features)
+        else:
+            scores = _score_with_xgboost(raw_features)
+
         return raw_features, scores
     finally:
         if os.path.exists(frames_dir):
@@ -311,7 +371,7 @@ def concat_simple(clip_files: List[str], output_path: str) -> None:
     )
 
 
-def summarize_video(video_input: str) -> str:
+def summarize_video(video_input: str, scorer: str = "xgboost") -> str:
     ensure_dir(SUMMARY_DIR)
     ensure_dir(TEMP_DIR)
 
@@ -319,10 +379,11 @@ def summarize_video(video_input: str) -> str:
     video_filename = os.path.basename(video_path)
 
     print(f"Processing: {video_path}")
+    print(f"Scorer: {scorer}")
 
     try:
         # 1. extract features and predict importance
-        features, scores = extract_features_and_scores(video_path)
+        features, scores = extract_features_and_scores(video_path, scorer=scorer)
         n_segments = len(scores)
 
         print(f"Segments: {n_segments} ({n_segments * SEGMENT_SECONDS}s video)")
@@ -365,8 +426,9 @@ def summarize_video(video_input: str) -> str:
         summary_ratio = total_summary_segments / n_segments
 
         metrics = {
-            "mse_proxy": round(float(score_std ** 2), 4),  # Score variance as MSE proxy
-            "r2_confidence": round(1.0 - (score_std / max(score_mean, 0.01)), 4),  # Prediction consistency
+            "scorer_model": scorer,
+            "mse_proxy": round(float(score_std ** 2), 4),
+            "r2_confidence": round(1.0 - (score_std / max(score_mean, 0.01)), 4),
             "mean_importance": round(score_mean, 4),
             "score_std": round(score_std, 4),
             "threshold": round(threshold, 4),
@@ -393,6 +455,10 @@ def summarize_video(video_input: str) -> str:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        raise ValueError("Usage: python src/inference/summarize.py <video_path>")
-    summarize_video(sys.argv[1])
+    import argparse
+    parser = argparse.ArgumentParser(description="Video-to-Video summarization")
+    parser.add_argument("video_path", help="Path to input video")
+    parser.add_argument("--model", choices=["xgboost", "transformer"], default="xgboost",
+                        help="Scoring model: xgboost (default) or transformer")
+    args = parser.parse_args()
+    summarize_video(args.video_path, scorer=args.model)

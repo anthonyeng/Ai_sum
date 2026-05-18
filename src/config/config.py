@@ -36,6 +36,7 @@ RF_MODEL_PATH = os.path.join(MODEL_DIR, "random_forest_video_split.pkl")
 BILSTM_MODEL_PATH = os.path.join(MODEL_DIR, "bilstm_video_split.pt")
 CAPTION_MODEL_PATH = os.path.join(MODEL_DIR, "caption_model.pt")
 CAPTION_VOCAB_PATH = os.path.join(MODEL_DIR, "caption_vocab.pkl")
+TRANSFORMER_MODEL_PATH = os.path.join(MODEL_DIR, "temporal_transformer.pt")
 
 # ── Device ───────────────────────────────────────────────────────────────────
 if torch.cuda.is_available():
@@ -102,6 +103,19 @@ LSTM_LR = 1e-3
 LSTM_EPOCHS = 60
 LSTM_BATCH_SIZE = 4
 LSTM_PATIENCE = 10
+
+# ── Temporal Transformer hyperparameters ─────────────────────────────────────
+TRANSFORMER_D_MODEL = 256
+TRANSFORMER_NHEAD = 8
+TRANSFORMER_NUM_LAYERS = 4
+TRANSFORMER_DIM_FEEDFORWARD = 512
+TRANSFORMER_DROPOUT = 0.1
+TRANSFORMER_LR = 5e-4
+TRANSFORMER_WEIGHT_DECAY = 1e-4
+TRANSFORMER_EPOCHS = 80
+TRANSFORMER_BATCH_SIZE = 4
+TRANSFORMER_PATIENCE = 15
+TRANSFORMER_WARMUP_EPOCHS = 5
 
 # ── CLIP ViT-B/32 (pretrained visual embeddings) ─────────────────────────────
 CLIP_MODEL_NAME = "ViT-B/32"
