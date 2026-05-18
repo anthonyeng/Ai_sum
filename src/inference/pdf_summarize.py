@@ -155,19 +155,24 @@ def _format_summary(key_sentences, full_text, num_pages):
         s = re.sub(r'\s+', ' ', s).strip()
         if len(s) < 20:
             continue
-        # Take only the FIRST sentence (up to first period)
-        first_period = s.find('. ')
-        if first_period > 15:
-            s = s[:first_period + 1]
+        # Remove chapter/section labels from start
+        s = re.sub(r'^(Chapter|Section|Part)\s*\d+[\s:\-\.]*', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'^\d+\.\d+[\s:\-\.]*', '', s)
+        s = re.sub(r'\s+', ' ', s).strip()
+        if len(s) < 20:
+            continue
+        # Take up to two sentences max
+        parts = re.split(r'(?<=[.!?])\s+', s)
+        s = ' '.join(parts[:2]).strip()
         s = s[0].upper() + s[1:]
         if not s.endswith(('.', '!', '?')):
             s += '.'
-        # Hard cap at 25 words
+        # Cap at 40 words
         words = s.split()
-        if len(words) > 25:
-            s = ' '.join(words[:25]) + '.'
-        # Skip if still looks like junk (too many colons, commas)
-        if s.count(':') > 2 or s.count(',') > 5:
+        if len(words) > 40:
+            s = ' '.join(words[:40]) + '.'
+        # Skip if still looks like junk
+        if s.count(':') > 3 or s.count(',') > 6:
             continue
         cleaned.append(s)
 
@@ -215,9 +220,8 @@ def pdf_summarize(pdf_path: str) -> dict:
     key_sentences = _tfidf_summarize(full_text, num_sentences=5)
     summary = _format_summary(key_sentences, full_text, num_pages)
 
-    # Title from first meaningful line
-    lines = [l.strip() for l in full_text.split('\n') if l.strip() and len(l.strip()) > 5]
-    title = lines[0][:60] if lines else "Document Summary"
+    # Title: use detected topics instead of chapter heading
+    title = f"Summary: {', '.join(top_topics[:3])}" if top_topics else "Document Summary"
 
     word_count = len(full_text.split())
 
