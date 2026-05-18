@@ -36,16 +36,36 @@ def _extract_pdf_text(pdf_path):
     return "\n".join(full_text), len(pages)
 
 
+def _clean_pdf_text(text):
+    """Clean raw PDF text of artifacts."""
+    # Remove bullet characters
+    text = re.sub(r'[•\u2022\u2023\u25E6\u2043\u2219]', '.', text)
+    # Remove "Image from..." references
+    text = re.sub(r'Image from[^.]*\.?', '', text, flags=re.IGNORECASE)
+    # Remove slide/page markers
+    text = re.sub(r'(Slide|Page)\s*\d+', '', text, flags=re.IGNORECASE)
+    # Collapse multiple spaces/newlines
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 def _split_sentences(text):
     """Split text into sentences."""
+    text = _clean_pdf_text(text)
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
-
-    if len(sentences) <= 2 and len(text) > 150:
-        sentences = re.split(r'\n+', text)
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
-
-    return sentences
+    # Filter out junk: too short, just labels, numbered lists without content
+    cleaned = []
+    for s in sentences:
+        s = s.strip()
+        if len(s) < 25:
+            continue
+        # Skip if it's just a title/heading (all caps or very short with colon)
+        if s.isupper() and len(s) < 60:
+            continue
+        if re.match(r'^\d+\.\s*$', s):
+            continue
+        cleaned.append(s)
+    return cleaned
 
 
 def _tfidf_summarize(text, num_sentences=5):
@@ -120,18 +140,24 @@ def _format_summary(key_sentences, full_text, num_pages):
         s = s.strip()
         if not s:
             continue
-        # Clean up bullet points and special chars
-        s = re.sub(r'^[\s\-\*\u2022]+', '', s)
+        # Clean up bullet points, special chars, references
+        s = re.sub(r'^[\s\-\*\u2022\d\.]+\s*', '', s)
+        s = re.sub(r'[•\u2022]', ',', s)
+        s = re.sub(r'Image from[^.]*\.?', '', s, flags=re.IGNORECASE)
         s = re.sub(r'\s+', ' ', s).strip()
-        if len(s) < 10:
+        if len(s) < 15:
             continue
         s = s[0].upper() + s[1:]
         if not s.endswith(('.', '!', '?')):
             s += '.'
+        # Take only the first clear sentence if it's a run-on
+        first_period = s.find('. ')
+        if first_period > 20 and first_period < len(s) - 5:
+            s = s[:first_period + 1]
         # Truncate overly long sentences
         words = s.split()
-        if len(words) > 35:
-            s = ' '.join(words[:35]) + '...'
+        if len(words) > 30:
+            s = ' '.join(words[:30]) + '.'
         cleaned.append(s)
 
     if not cleaned:
