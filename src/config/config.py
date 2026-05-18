@@ -103,6 +103,32 @@ LSTM_EPOCHS = 60
 LSTM_BATCH_SIZE = 4
 LSTM_PATIENCE = 10
 
+# ── CLIP ViT-B/32 (pretrained visual embeddings) ─────────────────────────────
+CLIP_MODEL_NAME = "ViT-B/32"
+CLIP_DIM = 512
+
+# ── Sentence-BERT (pretrained text embeddings) ───────────────────────────────
+SBERT_MODEL_NAME = "all-MiniLM-L6-v2"
+SBERT_DIM = 384
+
+# ── Audio features ───────────────────────────────────────────────────────────
+AUDIO_FEATURE_DIM = 4   # [rms_energy, spectral_centroid, zcr, energy_variance]
+AUDIO_SAMPLE_RATE = 16000
+
+# ── Multimodal fusion ────────────────────────────────────────────────────────
+FUSION_WEIGHTS = {
+    "audio_energy": 0.25,
+    "scene_change": 0.20,
+    "motion": 0.15,
+    "text_density": 0.20,
+    "visual_variance": 0.20,
+}
+
+# ── Summarization ────────────────────────────────────────────────────────────
+MMR_LAMBDA = 0.7           # MMR trade-off: 1.0=relevance only, 0.0=diversity only
+TEXTRANK_DAMPING = 0.85
+TEXTRANK_SIM_THRESHOLD = 0.1
+
 # ── Common ───────────────────────────────────────────────────────────────────
 TEST_RATIO = 0.2
 RANDOM_SEED = 42

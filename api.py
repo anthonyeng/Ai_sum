@@ -588,5 +588,83 @@ def url_summarize():
         return jsonify(data)
 
 
+# ── Query-Focused Summarization ───────────────────────────────────────────────
+
+@app.route("/query-summarize", methods=["POST"])
+def query_summarize_endpoint():
+    """
+    Semantic search over a previously summarized video's transcript.
+    Expects JSON: {"chat_id": int, "query": str}
+    Returns timestamped results matching the query.
+    """
+    data = request.get_json()
+    if not data or "query" not in data or "chat_id" not in data:
+        return jsonify({"error": "Provide chat_id and query"}), 400
+
+    chat_id = data["chat_id"]
+    query = data["query"].strip()
+    if not query:
+        return jsonify({"error": "Empty query"}), 400
+
+    # Find the last text_result message in this chat to get the transcript
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """SELECT content FROM messages
+           WHERE chat_id = %s AND message_type = 'text_result'
+           ORDER BY created_at DESC LIMIT 1""",
+        (chat_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "No text summary found in this chat. Summarize a video first."}), 404
+
+    content = row["content"] if isinstance(row["content"], dict) else json.loads(row["content"])
+    transcript = content.get("transcript", "")
+
+    if not transcript or len(transcript) < 20:
+        return jsonify({"error": "No transcript available for search"}), 404
+
+    # Build chunks from transcript
+    import re as _re
+    sentences = _re.split(r'(?<=[.!?])\s+', transcript)
+    if len(sentences) <= 2 and len(transcript) > 100:
+        words = transcript.split()
+        chunk_size = max(12, min(20, len(words) // 8))
+        sentences = [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
+    chunks = []
+    offset = 0.0
+    for s in sentences:
+        s = s.strip()
+        if len(s) < 10:
+            continue
+        dur = max(2.0, len(s.split()) * 0.4)
+        chunks.append({"text": s, "start": round(offset, 1), "end": round(offset + dur, 1)})
+        offset += dur
+
+    if not chunks:
+        return jsonify({"error": "Could not parse transcript into chunks"}), 400
+
+    # Captions from key_moments
+    captions = []
+    for km in content.get("key_moments", []):
+        captions.append({"text": km.get("label", ""), "timestamp": km.get("timestamp", "0:00")})
+
+    try:
+        from src.summarization.query_focused import query_summarize
+        result = query_summarize(
+            query=query,
+            transcript_chunks=chunks,
+            captions=captions if captions else None,
+            top_k=5,
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": f"Query search failed: {str(e)}"}), 500
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5003, debug=False, threaded=True)

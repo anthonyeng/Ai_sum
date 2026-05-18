@@ -17,11 +17,17 @@ Pillow>=10.0.0
 # ML Models
 xgboost>=2.0.0
 
-# Semantic Summarization (NEW)
+# Semantic Summarization
 sentence-transformers>=3.0.0
 rouge-score>=0.1.2
 bert-score>=0.3.13
 networkx>=3.0
+
+# CLIP Visual Embeddings
+git+https://github.com/openai/CLIP.git
+
+# Audio Features
+librosa>=0.10.0
 
 # NLP / Text
 nltk>=3.8
