@@ -220,8 +220,20 @@ def pdf_summarize(pdf_path: str) -> dict:
     key_sentences = _tfidf_summarize(full_text, num_sentences=5)
     summary = _format_summary(key_sentences, full_text, num_pages)
 
-    # Title: use detected topics instead of chapter heading
-    title = f"Summary: {', '.join(top_topics[:3])}" if top_topics else "Document Summary"
+    # Title: detect topics from text
+    _stop = {'the','a','an','is','are','was','were','be','been','have','has','had',
+             'do','does','did','will','would','could','should','can','may','might',
+             'to','of','in','for','on','with','at','by','from','as','and','or','but',
+             'not','no','so','if','this','that','it','its','we','you','they','he','she',
+             'our','your','their','about','also','just','very','more','all','some','any',
+             'than','then','now','when','what','which','who','how','there','here','where',
+             'while','only','other','these','those','such','like','used','using','based',
+             'chapter','example','given','make','made','image','objects','operations',
+             'been','being','into','through','during','before','after','between','each'}
+    _words = [w.lower() for w in re.findall(r'[a-zA-Z]+', full_text) if w.lower() not in _stop and len(w) > 3]
+    _freq = Counter(_words)
+    _topics = [w.capitalize() for w, _ in _freq.most_common(3)]
+    title = f"Summary: {', '.join(_topics)}" if _topics else "Document Summary"
 
     word_count = len(full_text.split())
 
