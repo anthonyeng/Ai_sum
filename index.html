@@ -234,17 +234,10 @@
         if (c.metrics) {
           const m = c.metrics;
           const metricItems = [];
+          // Video->Text: Cross-Entropy Loss
           if (m.cross_entropy_loss != null) metricItems.push(['Cross-Entropy Loss', m.cross_entropy_loss]);
-          if (m.bleu_4 != null) metricItems.push(['BLEU-4', m.bleu_4]);
-          if (m.perplexity != null) metricItems.push(['Perplexity', m.perplexity]);
-          if (m.keyword_coverage != null) metricItems.push(['Keyword Coverage', (m.keyword_coverage * 100).toFixed(1) + '%']);
-          if (m.compression_ratio != null) metricItems.push(['Compression', (m.compression_ratio * 100).toFixed(1) + '%']);
-          if (m.training_epoch != null) metricItems.push(['Trained Epochs', m.training_epoch]);
-          if (m.total_segments != null) metricItems.push(['Segments', m.total_segments]);
-          if (m.feature_dim != null) metricItems.push(['Feature Dim', m.feature_dim]);
-          if (m.key_points_extracted != null) metricItems.push(['Key Points', m.key_points_extracted]);
-          if (m.summary_words != null) metricItems.push(['Summary Words', m.summary_words]);
-          if (m.document_words != null) metricItems.push(['Doc Words', m.document_words]);
+          // PDF: Keyword Coverage
+          else if (m.keyword_coverage != null) metricItems.push(['Keyword Coverage', (m.keyword_coverage * 100).toFixed(1) + '%']);
           if (metricItems.length) {
             sections += `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${metricItems.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
           }
@@ -355,13 +348,8 @@
       let metricsHtml = "";
       if (metrics && Object.keys(metrics).length) {
         const items = [];
+        // Video->Video: R2 Score only
         if (metrics.r2_confidence != null) items.push(['R2 Score', metrics.r2_confidence]);
-        if (metrics.mse_proxy != null) items.push(['MSE', metrics.mse_proxy]);
-        if (metrics.mean_importance != null) items.push(['Mean Score', metrics.mean_importance]);
-        if (metrics.compression_ratio != null) items.push(['Compression', (metrics.compression_ratio*100).toFixed(1)+'%']);
-        if (metrics.selected_segments != null) items.push(['Selected', metrics.selected_segments]);
-        if (metrics.total_segments != null) items.push(['Total Seg', metrics.total_segments]);
-        if (metrics.scenes_after_dedup != null) items.push(['Scenes', metrics.scenes_after_dedup]);
         if (items.length) {
           metricsHtml = `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${items.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
         }
