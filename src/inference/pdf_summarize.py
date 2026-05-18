@@ -140,24 +140,35 @@ def _format_summary(key_sentences, full_text, num_pages):
         s = s.strip()
         if not s:
             continue
-        # Clean up bullet points, special chars, references
+        # Remove numbering, bullets, special chars
         s = re.sub(r'^[\s\-\*\u2022\d\.]+\s*', '', s)
-        s = re.sub(r'[•\u2022]', ',', s)
+        s = re.sub(r'[•\u2022\u2023]', ' ', s)
+        # Remove URLs
+        s = re.sub(r'https?://\S+', '', s)
+        s = re.sub(r'\S+\.\S+/\S+', '', s)
+        # Remove image/slide references
         s = re.sub(r'Image from[^.]*\.?', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'(Slide|Page|Figure|Fig)\s*\d*[:.]*', '', s, flags=re.IGNORECASE)
+        # Remove parenthetical short refs like (e.g. wheels, legs)
+        s = re.sub(r'\([^)]{0,15}\)', '', s)
+        # Clean whitespace
         s = re.sub(r'\s+', ' ', s).strip()
-        if len(s) < 15:
+        if len(s) < 20:
             continue
+        # Take only the FIRST sentence (up to first period)
+        first_period = s.find('. ')
+        if first_period > 15:
+            s = s[:first_period + 1]
         s = s[0].upper() + s[1:]
         if not s.endswith(('.', '!', '?')):
             s += '.'
-        # Take only the first clear sentence if it's a run-on
-        first_period = s.find('. ')
-        if first_period > 20 and first_period < len(s) - 5:
-            s = s[:first_period + 1]
-        # Truncate overly long sentences
+        # Hard cap at 25 words
         words = s.split()
-        if len(words) > 30:
-            s = ' '.join(words[:30]) + '.'
+        if len(words) > 25:
+            s = ' '.join(words[:25]) + '.'
+        # Skip if still looks like junk (too many colons, commas)
+        if s.count(':') > 2 or s.count(',') > 5:
+            continue
         cleaned.append(s)
 
     if not cleaned:
