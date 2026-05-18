@@ -201,8 +201,23 @@ def main():
 
     os.makedirs(os.path.dirname(MODEL_OUT), exist_ok=True)
     best_val_loss = float("inf")
+    start_epoch = 1
 
-    for epoch in range(1, EPOCHS + 1):
+    # ── Resume from checkpoint if available ──────────────────────────────────
+    if os.path.exists(MODEL_OUT):
+        print("Loading checkpoint to resume training...")
+        ckpt = torch.load(MODEL_OUT, map_location=DEVICE, weights_only=False)
+        model.load_state_dict(ckpt["model_state"])
+        start_epoch = ckpt["epoch"] + 1
+        if "optimizer_state" in ckpt:
+            optimizer.load_state_dict(ckpt["optimizer_state"])
+        if "scheduler_state" in ckpt:
+            scheduler.load_state_dict(ckpt["scheduler_state"])
+        if "best_val_loss" in ckpt:
+            best_val_loss = ckpt["best_val_loss"]
+        print(f"  Resuming from epoch {start_epoch} (best val loss: {best_val_loss:.4f})\n")
+
+    for epoch in range(start_epoch, EPOCHS + 1):
         train_loss = train_epoch(model, train_loader, optimizer, criterion, TEACHER_FORCING)
         val_loss = eval_epoch(model, val_loader, criterion)
         bleu = compute_bleu(model, val_loader, vocab)
@@ -222,6 +237,9 @@ def main():
                 {
                     "epoch": epoch,
                     "model_state": model.state_dict(),
+                    "optimizer_state": optimizer.state_dict(),
+                    "scheduler_state": scheduler.state_dict(),
+                    "best_val_loss": best_val_loss,
                     "vocab_size": len(vocab),
                     "config": {
                         "embed_dim": EMBED_DIM,
