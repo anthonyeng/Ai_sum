@@ -555,11 +555,16 @@ def url_summarize():
         if not os.path.exists(output_path):
             return jsonify({"error": "Output file not found"}), 500
 
-        if chat_id:
-            _save_message(int(chat_id), "assistant", {"type": "video_summary"}, "video_result")
+        metrics_path = output_path.replace(".mp4", "_metrics.json")
+        video_metrics = {}
+        if os.path.exists(metrics_path):
+            with open(metrics_path) as mf:
+                video_metrics = json.load(mf)
 
-        return send_file(output_path, as_attachment=True,
-                         download_name="summary.mp4", mimetype="video/mp4")
+        if chat_id:
+            _save_message(int(chat_id), "assistant", {"type": "video_summary", "metrics": video_metrics}, "video_result")
+
+        return jsonify({"video_url": f"/download/{output_name}", "metrics": video_metrics})
     else:
         try:
             result = subprocess.run(
