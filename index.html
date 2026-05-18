@@ -231,6 +231,24 @@
         let sections = `<div style="white-space:pre-line">${summaryHtml}</div>`;
         if (c.transcript) sections += `<div class="summary-section"><div class="summary-section-label">Transcript</div><div class="summary-transcript">${esc(c.transcript)}</div></div>`;
         if (c.stats) sections += `<div class="summary-stats">${Object.entries(c.stats).map(([k,v])=>`<div class="summary-stat"><div class="summary-stat-val">${v}</div><div class="summary-stat-label">${k.replace(/_/g," ")}</div></div>`).join("")}</div>`;
+        if (c.metrics) {
+          const m = c.metrics;
+          const metricItems = [];
+          if (m.compression_ratio != null) metricItems.push(['Compression', (m.compression_ratio * 100).toFixed(1) + '%']);
+          if (m.keyword_coverage != null) metricItems.push(['Keyword Coverage', (m.keyword_coverage * 100).toFixed(1) + '%']);
+          if (m.caption_perplexity != null) metricItems.push(['Caption PPL', m.caption_perplexity]);
+          if (m.caption_val_loss != null) metricItems.push(['Caption Loss', m.caption_val_loss]);
+          if (m.caption_diversity != null) metricItems.push(['Caption Diversity', (m.caption_diversity * 100).toFixed(0) + '%']);
+          if (m.total_segments != null) metricItems.push(['Segments', m.total_segments]);
+          if (m.feature_dim != null) metricItems.push(['Feature Dim', m.feature_dim]);
+          if (m.key_points_extracted != null) metricItems.push(['Key Points', m.key_points_extracted]);
+          if (m.summary_words != null) metricItems.push(['Summary Words', m.summary_words]);
+          if (m.transcript_words != null) metricItems.push(['Transcript Words', m.transcript_words]);
+          if (m.document_words != null) metricItems.push(['Doc Words', m.document_words]);
+          if (metricItems.length) {
+            sections += `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${metricItems.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
+          }
+        }
         sections += `<details class="summary-json"><summary>View JSON</summary><pre>${esc(JSON.stringify(c,null,2))}</pre></details>`;
         body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag text">Text</span><span class="summary-title">${esc(c.title || "Summary")}</span></div><div class="summary-body">${sections}</div></div>`;
       } else if (m.message_type === "video_result") {

@@ -248,15 +248,39 @@ def pdf_summarize(pdf_path: str) -> dict:
 
     word_count = len(full_text.split())
 
+    # Compute metrics
+    metrics = {}
+    t_words = len(full_text.split())
+    s_words = len(summary.split())
+    metrics["compression_ratio"] = round(s_words / max(t_words, 1), 3)
+    metrics["document_words"] = t_words
+    metrics["summary_words"] = s_words
+
+    # Keyword coverage
+    stop = {'the','a','an','is','are','was','were','be','been','have','has','had',
+            'do','does','did','will','would','could','should','can','may','might',
+            'to','of','in','for','on','with','at','by','from','as','and','or','but',
+            'not','no','so','if','this','that','it','its','we','you','they','he','she',
+            'about','also','just','very','more','all','some','any','than','then','now'}
+    doc_words = [w.lower() for w in re.findall(r'[a-zA-Z]+', full_text) if w.lower() not in stop and len(w) > 3]
+    freq = Counter(doc_words)
+    top_20 = set(w for w, _ in freq.most_common(20))
+    sum_words = set(w.lower() for w in re.findall(r'[a-zA-Z]+', summary) if len(w) > 3)
+    covered = len(top_20 & sum_words)
+    metrics["keyword_coverage"] = round(covered / max(len(top_20), 1), 3)
+    metrics["key_points_extracted"] = len(key_sentences)
+    metrics["total_sentences"] = len(_split_sentences(full_text))
+
     return {
         "title": title,
         "summary": summary,
-        "full_text": full_text[:3000],  # First 3000 chars as preview
+        "full_text": full_text[:3000],
         "stats": {
             "pages": num_pages,
             "word_count": word_count,
-            "sentences": len(_split_sentences(full_text)),
+            "sentences": metrics["total_sentences"],
         },
+        "metrics": metrics,
         "file": os.path.basename(pdf_path),
     }
 

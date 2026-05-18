@@ -325,6 +325,35 @@ body {
 .summary-stat-val { font-size: 18px; font-weight: 700; color: var(--text); }
 .summary-stat-label { font-size: 10px; color: var(--dim); margin-top: 2px; }
 
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.metric-item {
+  text-align: center;
+  padding: 10px 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.metric-item-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-item-label {
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .summary-json {
   margin-top: 12px;
   border-top: 1px solid var(--border);

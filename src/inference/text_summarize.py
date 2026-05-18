@@ -518,6 +518,59 @@ def _build_schema(visual_captions, timestamps, duration, video_name,
     return result
 
 
+def _compute_metrics(transcript, summary, seg_features, visual_captions):
+    """Compute real-time evaluation metrics for the summary."""
+    import math
+    metrics = {}
+
+    # 1. Compression Ratio: how much shorter the summary is vs transcript
+    if transcript:
+        t_words = len(transcript.split())
+        s_words = len(summary.split())
+        metrics["compression_ratio"] = round(s_words / max(t_words, 1), 3)
+        metrics["transcript_words"] = t_words
+        metrics["summary_words"] = s_words
+
+    # 2. Coverage: % of top keywords from transcript that appear in summary
+    if transcript and summary:
+        stop = {'the','a','an','is','are','was','were','be','been','have','has','had',
+                'do','does','did','will','would','could','should','can','may','might',
+                'to','of','in','for','on','with','at','by','from','as','and','or','but',
+                'not','no','so','if','this','that','it','its','we','you','they','he','she',
+                'about','also','just','very','more','all','some','any','than','then','now'}
+        t_words_set = [w.lower() for w in re.findall(r'[a-zA-Z]+', transcript) if w.lower() not in stop and len(w) > 3]
+        freq = Counter(t_words_set)
+        top_20 = set(w for w, _ in freq.most_common(20))
+        s_words_set = set(w.lower() for w in re.findall(r'[a-zA-Z]+', summary) if len(w) > 3)
+        covered = len(top_20 & s_words_set)
+        metrics["keyword_coverage"] = round(covered / max(len(top_20), 1), 3)
+
+    # 3. Caption model perplexity (from checkpoint)
+    try:
+        ckpt = torch.load(CAPTION_MODEL_PATH, map_location="cpu", weights_only=False)
+        val_loss = ckpt.get("best_val_loss", 0)
+        if val_loss > 0:
+            metrics["caption_perplexity"] = round(math.exp(val_loss), 1)
+            metrics["caption_val_loss"] = round(val_loss, 4)
+            metrics["caption_epoch"] = ckpt.get("epoch", 0)
+    except Exception:
+        pass
+
+    # 4. Visual diversity: how diverse are the scene captions
+    if visual_captions:
+        unique = set(c.strip().lower() for c in visual_captions if c.strip())
+        metrics["visual_scenes"] = len(visual_captions)
+        metrics["unique_captions"] = len(unique)
+        metrics["caption_diversity"] = round(len(unique) / max(len(visual_captions), 1), 3)
+
+    # 5. Feature extraction info
+    if seg_features is not None and len(seg_features) > 0:
+        metrics["feature_dim"] = seg_features.shape[1] if len(seg_features.shape) > 1 else 0
+        metrics["total_segments"] = len(seg_features)
+
+    return metrics
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -564,11 +617,18 @@ def text_summarize_video(video_path: str) -> dict:
         key_sentences = _tfidf_summarize(transcript, num_sentences=5)
         audio_summary = _format_professional_summary(key_sentences, transcript)
 
-    return _build_schema(
+    result = _build_schema(
         visual_captions, timestamps, duration, video_path,
         transcript=transcript,
         audio_summary=audio_summary,
     )
+
+    # Compute real-time metrics
+    result["metrics"] = _compute_metrics(
+        transcript, result.get("summary", ""), seg_features, visual_captions
+    )
+
+    return result
 
 
 if __name__ == "__main__":
