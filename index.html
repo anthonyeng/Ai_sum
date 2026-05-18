@@ -8,6 +8,13 @@
 </head>
 <body>
 
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-content">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div>Drop your file here</div>
+      <div style="font-size:13px;color:var(--dim)">MP4 or PDF</div>
+    </div>
+  </div>
   <div class="spinner-overlay" id="spinnerOverlay">
     <div class="spinner"></div>
     <div class="spinner-text" id="spinnerText">Processing...</div>
@@ -340,6 +347,27 @@
       area.appendChild(d);
       area.scrollTop = area.scrollHeight;
     }
+
+    // ── Drag & drop anywhere on page ─────────────────────────────────────
+    document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
+    document.addEventListener("dragleave", e => { if (e.relatedTarget === null) document.body.classList.remove("dragging"); });
+    document.addEventListener("drop", e => {
+      e.preventDefault();
+      document.body.classList.remove("dragging");
+      const f = e.dataTransfer?.files?.[0];
+      if (f) {
+        const ext = f.name.toLowerCase().split('.').pop();
+        if (["mp4","pdf"].includes(ext)) {
+          // Trigger the same flow as file input
+          const dt = new DataTransfer();
+          dt.items.add(f);
+          document.getElementById("videoInput").files = dt.files;
+          document.getElementById("videoInput").dispatchEvent(new Event("change"));
+        } else {
+          showToast("Only .mp4 or .pdf files");
+        }
+      }
+    });
 
     // ── Init ────────────────────────────────────────────────────────────────
     loadChats();

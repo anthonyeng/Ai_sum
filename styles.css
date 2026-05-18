@@ -520,6 +520,35 @@ body {
 .toast.toast-error { background: var(--red-light); border: 1px solid #fca5a5; color: var(--red); }
 .toast.toast-success { background: var(--green-light); border: 1px solid #6ee7b7; color: var(--green); }
 
+/* ── Drop overlay ──────────────────────────────────────────────────────────── */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(37,99,235,0.06);
+  border: 3px dashed var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+body.dragging .drop-overlay { opacity: 1; }
+
+.drop-overlay-content {
+  text-align: center;
+  color: var(--blue);
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
 .hidden { display: none !important; }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
