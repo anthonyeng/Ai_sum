@@ -103,7 +103,11 @@ def _tfidf_summarize(text, num_sentences=5):
     all_words = Counter()
     for tokens in sent_tokens:
         all_words.update(tokens)
-    topic_words = set(w for w, _ in all_words.most_common(20))
+
+    # Topic words: frequent terms = core concepts
+    topic_words = set(w for w, _ in all_words.most_common(25))
+    # Key terms: words that appear 2-5 times are specific/important (like PEAS, actuators)
+    key_terms = set(w for w, c in all_words.items() if 2 <= c <= max(5, n_docs // 10) and len(w) > 3)
 
     scores = []
     for i, tokens in enumerate(sent_tokens):
@@ -112,19 +116,26 @@ def _tfidf_summarize(text, num_sentences=5):
             continue
         tf = Counter(tokens)
         score = 0.0
+        has_key_term = False
         for word, count in tf.items():
             tf_val = count / len(tokens)
             idf_val = math.log((n_docs + 1) / (doc_freq[word] + 1)) + 1
             score += tf_val * idf_val
             if word in topic_words:
-                score += 0.5
+                score += 0.3
+            if word in key_terms:
+                score += 0.8  # Strong boost for specific domain terms
+                has_key_term = True
+        # Bonus for sentences with domain-specific terms
+        if has_key_term:
+            score *= 1.3
         if len(tokens) < 5:
             score *= 0.5
-        # Boost early content (abstract/intro) and middle
+        # Spread across document — boost sentences from different positions
         position = i / max(n_docs - 1, 1)
         if position < 0.15:
-            score *= 1.3
-        elif 0.15 < position < 0.7:
+            score *= 1.2
+        elif 0.3 < position < 0.8:
             score *= 1.1
         scores.append(score)
 
@@ -202,7 +213,7 @@ def _format_summary(key_sentences, full_text, num_pages):
     lines.append(f"Overview: This document ({num_pages} pages, ~{word_count:,} words) covers {topic_phrase}.")
     lines.append("")
     lines.append("Key Points:")
-    for i, s in enumerate(cleaned[:5], 1):
+    for i, s in enumerate(cleaned[:8], 1):
         lines.append(f"  {i}. {s}")
 
     return "\n".join(lines)
@@ -217,7 +228,7 @@ def pdf_summarize(pdf_path: str) -> dict:
     if not full_text or len(full_text) < 50:
         raise ValueError("Could not extract text from PDF.")
 
-    key_sentences = _tfidf_summarize(full_text, num_sentences=5)
+    key_sentences = _tfidf_summarize(full_text, num_sentences=8)
     summary = _format_summary(key_sentences, full_text, num_pages)
 
     # Title: detect topics from text
