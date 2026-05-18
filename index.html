@@ -30,7 +30,7 @@
         <div class="sidebar-logo">VS</div>
         <div>
           <div class="sidebar-title">Video Summarizer</div>
-          <div class="sidebar-sub">ML-powered analysis</div>
+          <div class="sidebar-sub">Multimodal ML System</div>
         </div>
       </div>
       <button class="new-chat-btn" onclick="newChat()">
@@ -38,55 +38,97 @@
         New Chat
       </button>
       <div class="chat-list" id="chatList"></div>
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-text">SBERT+MMR | Transformer | CLIP</div>
+      </div>
     </aside>
 
     <!-- Main -->
     <div class="main">
 
-      <!-- Chat messages -->
-      <div class="chat-area" id="chatArea">
-        <div class="chat-empty" id="chatEmpty">
-          <div class="chat-empty-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          </div>
-          <div class="chat-empty-text">Upload a video or paste a YouTube URL</div>
-          <div class="chat-empty-sub">Get a video summary or text analysis</div>
-        </div>
+      <!-- Tab bar -->
+      <div class="tab-bar" id="tabBar">
+        <button class="tab active" data-tab="chat" onclick="switchTab('chat')">Chat</button>
+        <button class="tab" data-tab="query" onclick="switchTab('query')">Query Search</button>
+        <button class="tab" data-tab="metrics" onclick="switchTab('metrics')">Metrics</button>
       </div>
 
-      <!-- Input bar -->
-      <div class="input-bar">
-        <div class="input-bar-inner">
-          <div id="fileTag" class="input-file-tag hidden">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-            <span id="fileTagName"></span>
-            <button onclick="clearFile()">&times;</button>
-          </div>
-          <div class="input-row">
-            <div class="input-wrap">
-              <button class="input-file-btn" id="fileBtn" onclick="document.getElementById('videoInput').click()" title="Upload video">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              </button>
-              <input type="file" id="videoInput" accept="video/mp4,.pdf" hidden />
-              <input type="text" class="input-field" id="urlInput" placeholder="Paste YouTube URL or upload a file..." />
+      <!-- Chat tab -->
+      <div class="tab-content active" id="tab-chat">
+        <div class="chat-area" id="chatArea">
+          <div class="chat-empty" id="chatEmpty">
+            <div class="chat-empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             </div>
-            <button class="action-btn video-btn" id="videoBtn" disabled onclick="doSummarize('video')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-              Video
-            </button>
-            <button class="action-btn text-btn" id="textBtn" disabled onclick="doSummarize('text')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
-              Text
-            </button>
-            <button class="action-btn pdf-btn" id="pdfBtn" disabled onclick="doSummarize('pdf')" style="background:#e65100;display:none">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              PDF
-            </button>
+            <div class="chat-empty-text">Upload a video or paste a YouTube URL</div>
+            <div class="chat-empty-sub">Get a video summary, text analysis, or search within videos</div>
+          </div>
+        </div>
+
+        <!-- Input bar -->
+        <div class="input-bar">
+          <div class="input-bar-inner">
+            <div id="fileTag" class="input-file-tag hidden">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              <span id="fileTagName"></span>
+              <button onclick="clearFile()">&times;</button>
+            </div>
+            <div class="input-row">
+              <div class="input-wrap">
+                <button class="input-file-btn" id="fileBtn" onclick="document.getElementById('videoInput').click()" title="Upload video">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </button>
+                <input type="file" id="videoInput" accept="video/mp4,.pdf" hidden />
+                <input type="text" class="input-field" id="urlInput" placeholder="Paste YouTube URL or upload a file..." />
+              </div>
+              <button class="action-btn video-btn" id="videoBtn" disabled onclick="doSummarize('video')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                Video
+              </button>
+              <button class="action-btn text-btn" id="textBtn" disabled onclick="doSummarize('text')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+                Text
+              </button>
+              <button class="action-btn pdf-btn" id="pdfBtn" disabled onclick="doSummarize('pdf')" style="background:#e65100;display:none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                PDF
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
+      <!-- Query Search tab -->
+      <div class="tab-content" id="tab-query">
+        <div class="query-panel">
+          <div class="query-header">
+            <h2>Query-Focused Search</h2>
+            <p>Search within your video's transcript and captions using natural language</p>
+          </div>
+          <div class="query-input-row">
+            <input type="text" class="query-input" id="queryInput" placeholder="e.g. &quot;explain thermodynamics&quot; or &quot;find the equations&quot;" />
+            <button class="action-btn text-btn" id="queryBtn" onclick="doQuery()">Search</button>
+          </div>
+          <div class="query-results" id="queryResults">
+            <div class="query-empty">Summarize a video first, then search within it</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics tab -->
+      <div class="tab-content" id="tab-metrics">
+        <div class="metrics-panel">
+          <div class="metrics-header">
+            <h2>Evaluation Metrics</h2>
+            <p>ML model performance and summarization quality metrics</p>
+          </div>
+          <div class="metrics-dashboard" id="metricsDashboard">
+            <div class="metrics-empty">Metrics will appear after summarization</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
 
   <script>
@@ -94,10 +136,18 @@
     let currentChatId = null;
     let selectedFile = null;
     let busy = false;
+    let lastMetrics = null;
+    let lastSummaryData = null;
 
     function showToast(m,t="error"){const e=document.getElementById("toast");e.textContent=m;e.className=`toast toast-${t} active`;clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("active"),3500)}
     function showSpinner(t,s){document.getElementById("spinnerText").textContent=t;document.getElementById("spinnerSub").textContent=s||"";document.getElementById("spinnerOverlay").classList.add("active")}
     function hideSpinner(){document.getElementById("spinnerOverlay").classList.remove("active")}
+
+    // ── Tabs ──────────────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === `tab-${tab}`));
+    }
 
     // ── File handling ──────────────────────────────────────────────────────
     document.getElementById("videoInput").addEventListener("change", e => {
@@ -110,7 +160,6 @@
       document.getElementById("fileTagName").textContent = f.name;
       document.getElementById("fileTag").classList.remove("hidden");
       document.getElementById("fileBtn").classList.add("has-file");
-      // Show PDF button for PDFs, hide video/text buttons
       const isPdf = f.name.toLowerCase().endsWith(".pdf");
       document.getElementById("videoBtn").style.display = isPdf ? "none" : "flex";
       document.getElementById("textBtn").style.display = isPdf ? "none" : "flex";
@@ -167,8 +216,12 @@
         const r = await fetch(`${BASE}/chats`, { method: "POST" });
         const c = await r.json();
         currentChatId = c.id;
+        lastMetrics = null;
+        lastSummaryData = null;
         await loadChats();
         renderMessages([]);
+        updateMetricsDashboard(null);
+        document.getElementById("queryResults").innerHTML = '<div class="query-empty">Summarize a video first, then search within it</div>';
       } catch { showToast("Failed to create chat"); }
     }
 
@@ -179,13 +232,20 @@
         const r = await fetch(`${BASE}/chats/${id}`);
         const data = await r.json();
         renderMessages(data.messages || []);
+        // Extract last metrics
+        const lastResult = [...(data.messages || [])].reverse().find(m => m.message_type === "text_result" || m.message_type === "video_result");
+        if (lastResult) {
+          lastSummaryData = lastResult.content;
+          lastMetrics = lastResult.content?.metrics || lastResult.content;
+          updateMetricsDashboard(lastMetrics);
+        }
       } catch { showToast("Failed to load chat"); }
     }
 
     async function deleteChat(id) {
       try {
         await fetch(`${BASE}/chats/${id}`, { method: "DELETE" });
-        if (currentChatId === id) { currentChatId = null; renderMessages([]); }
+        if (currentChatId === id) { currentChatId = null; renderMessages([]); lastMetrics = null; lastSummaryData = null; }
         await loadChats();
       } catch { showToast("Failed to delete"); }
     }
@@ -229,23 +289,55 @@
       if (m.message_type === "text_result" || m.message_type === "pdf_result") {
         const summaryHtml = esc(c.summary || "").replace(/\n/g, "<br>");
         let sections = `<div style="white-space:pre-line">${summaryHtml}</div>`;
+
+        // Key moments timeline
+        if (c.key_moments && c.key_moments.length) {
+          sections += `<div class="summary-section"><div class="summary-section-label">Key Moments</div><div class="timeline">`;
+          c.key_moments.forEach(km => {
+            sections += `<div class="timeline-item"><span class="timeline-ts">${esc(km.timestamp)}</span><span class="timeline-label">${esc(km.label)}</span></div>`;
+          });
+          sections += `</div></div>`;
+        }
+
+        // Transcript viewer
         if (c.transcript) sections += `<div class="summary-section"><div class="summary-section-label">Transcript</div><div class="summary-transcript">${esc(c.transcript)}</div></div>`;
+
+        // Stats
         if (c.stats) sections += `<div class="summary-stats">${Object.entries(c.stats).map(([k,v])=>`<div class="summary-stat"><div class="summary-stat-val">${v}</div><div class="summary-stat-label">${k.replace(/_/g," ")}</div></div>`).join("")}</div>`;
+
+        // Metrics
         if (c.metrics) {
-          const m = c.metrics;
-          const metricItems = [];
-          // Video->Text: Cross-Entropy Loss
-          if (m.cross_entropy_loss != null) metricItems.push(['Cross-Entropy Loss', m.cross_entropy_loss]);
-          // PDF: Keyword Coverage
-          else if (m.keyword_coverage != null) metricItems.push(['Keyword Coverage', (m.keyword_coverage * 100).toFixed(1) + '%']);
-          if (metricItems.length) {
-            sections += `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${metricItems.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
+          const met = c.metrics;
+          const items = [];
+          if (met.summarization_method) items.push(['Method', met.summarization_method]);
+          if (met.cross_entropy_loss != null) items.push(['CE Loss', met.cross_entropy_loss]);
+          if (met.compression_ratio != null) items.push(['Compression', (met.compression_ratio * 100).toFixed(1) + '%']);
+          if (met.keyword_coverage != null) items.push(['Coverage', (met.keyword_coverage * 100).toFixed(1) + '%']);
+          if (met.caption_diversity != null) items.push(['Diversity', (met.caption_diversity * 100).toFixed(1) + '%']);
+          if (met.perplexity != null && met.perplexity > 0) items.push(['Perplexity', met.perplexity]);
+          if (met.total_segments != null) items.push(['Segments', met.total_segments]);
+          if (items.length) {
+            sections += `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${items.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
           }
         }
+
         sections += `<details class="summary-json"><summary>View JSON</summary><pre>${esc(JSON.stringify(c,null,2))}</pre></details>`;
         body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag text">Text</span><span class="summary-title">${esc(c.title || "Summary")}</span></div><div class="summary-body">${sections}</div></div>`;
       } else if (m.message_type === "video_result") {
-        body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag video">Video</span><span class="summary-title">Video Summary</span></div><div class="summary-body"><p>Video summary generated successfully.</p></div></div>`;
+        let metricsHtml = "";
+        const met = c.metrics || c;
+        if (met) {
+          const items = [];
+          if (met.scorer_model) items.push(['Model', met.scorer_model]);
+          if (met.r2_confidence != null) items.push(['R2 Score', met.r2_confidence]);
+          if (met.compression_ratio != null) items.push(['Compression', (met.compression_ratio * 100).toFixed(0) + '%']);
+          if (met.selected_segments != null) items.push(['Segments', `${met.selected_segments}/${met.total_segments}`]);
+          if (met.scenes_after_dedup != null) items.push(['Scenes', met.scenes_after_dedup]);
+          if (items.length) {
+            metricsHtml = `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${items.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
+          }
+        }
+        body = `<div class="summary-card"><div class="summary-header"><span class="summary-tag video">Video</span><span class="summary-title">Video Summary</span></div><div class="summary-body"><p>Video summary generated.</p>${metricsHtml}</div></div>`;
       } else {
         body = `<div class="msg-content"><p>${esc(c.text || JSON.stringify(c))}</p></div>`;
       }
@@ -261,8 +353,6 @@
       if (busy) return;
       const url = document.getElementById("urlInput").value.trim();
       if (!selectedFile && url.length < 5) return;
-
-      // Create chat if needed
       if (!currentChatId) await newChat();
 
       busy = true;
@@ -271,7 +361,6 @@
       showSpinner(mode === "video" ? "Generating video summary..." : "Analyzing video...",
         isUrl ? "Downloading from YouTube..." : "Processing uploaded file...");
 
-      // Add user message
       const userContent = isUrl ? { url } : { filename: selectedFile.name, size: selectedFile.size };
       addMsgToUI("user", userContent);
 
@@ -283,37 +372,35 @@
           form.append("chat_id", currentChatId);
           res = await fetch(`${BASE}/pdf-summarize`, { method: "POST", body: form });
         } else if (isUrl) {
-          res = await fetch(`${BASE}/url-summarize`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url, mode, chat_id: currentChatId }),
-          });
+          const form = new FormData();
+          form.append("url", url);
+          form.append("mode", mode);
+          form.append("chat_id", currentChatId);
+          res = await fetch(`${BASE}/url-summarize`, { method: "POST", body: form });
         } else {
           const form = new FormData();
-          form.append("video", selectedFile);
+          form.append("file", selectedFile);
           form.append("chat_id", currentChatId);
-          const endpoint = mode === "video" ? "/summarize?format=json" : "/text-summarize";
+          const endpoint = mode === "video" ? "/summarize" : "/text-summarize";
           res = await fetch(`${BASE}${endpoint}`, { method: "POST", body: form });
         }
 
         if (mode === "pdf") {
           const data = await res.json();
-          if (!res.ok) { showToast(data.error || "Failed"); }
-          else { addTextResultToUI({...data, transcript: data.full_text}); showToast("PDF summary ready!", "success"); }
+          if (!res.ok) showToast(data.error || "Failed");
+          else { addTextResultToUI({...data, transcript: data.full_text}); lastMetrics = data.metrics; lastSummaryData = data; updateMetricsDashboard(data.metrics); showToast("PDF summary ready!", "success"); }
         } else if (mode === "video") {
-          if (!res.ok) { const d = await res.json().catch(()=>({})); showToast(d.error||"Failed"); setStatus("Error","error"); }
+          if (!res.ok) { const d = await res.json().catch(()=>({})); showToast(d.error||"Failed"); }
           else {
             const data = await res.json();
             addVideoResultToUI(BASE + data.video_url, data.metrics);
+            lastMetrics = data.metrics; updateMetricsDashboard(data.metrics);
             showToast("Video summary ready!", "success");
           }
         } else if (mode === "text") {
           const data = await res.json();
-          if (!res.ok) { showToast(data.error || "Failed"); }
-          else { addTextResultToUI(data); showToast("Text summary ready!", "success"); }
-        } else if (!res.ok) {
-          const d = await res.json().catch(() => ({}));
-          showToast(d.error || "Failed");
+          if (!res.ok) showToast(data.error || "Failed");
+          else { addTextResultToUI(data); lastMetrics = data.metrics; lastSummaryData = data; updateMetricsDashboard(data.metrics); showToast("Text summary ready!", "success"); }
         }
       } catch (err) { showToast(err.message); }
       finally {
@@ -348,8 +435,10 @@
       let metricsHtml = "";
       if (metrics && Object.keys(metrics).length) {
         const items = [];
-        // Video->Video: R2 Score only
+        if (metrics.scorer_model) items.push(['Model', metrics.scorer_model]);
         if (metrics.r2_confidence != null) items.push(['R2 Score', metrics.r2_confidence]);
+        if (metrics.compression_ratio != null) items.push(['Compression', (metrics.compression_ratio * 100).toFixed(0) + '%']);
+        if (metrics.selected_segments != null) items.push(['Segments', `${metrics.selected_segments}/${metrics.total_segments}`]);
         if (items.length) {
           metricsHtml = `<div class="summary-section"><div class="summary-section-label">Model Metrics</div><div class="metrics-grid">${items.map(([k,v])=>`<div class="metric-item"><div class="metric-item-val">${v}</div><div class="metric-item-label">${k}</div></div>`).join('')}</div></div>`;
         }
@@ -371,7 +460,82 @@
       area.scrollTop = area.scrollHeight;
     }
 
-    // ── Drag & drop anywhere on page ─────────────────────────────────────
+    // ── Query Search ─────────────────────────────────────────────────────
+    async function doQuery() {
+      const query = document.getElementById("queryInput").value.trim();
+      if (!query) return;
+      if (!currentChatId) { showToast("Summarize a video first"); return; }
+
+      const resultsEl = document.getElementById("queryResults");
+      resultsEl.innerHTML = '<div class="query-loading">Searching...</div>';
+
+      try {
+        const res = await fetch(`${BASE}/query-summarize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: currentChatId, query }),
+        });
+        const data = await res.json();
+        if (!res.ok) { resultsEl.innerHTML = `<div class="query-empty">${esc(data.error || data.detail || "Search failed")}</div>`; return; }
+
+        if (!data.results || !data.results.length) {
+          resultsEl.innerHTML = '<div class="query-empty">No results found</div>';
+          return;
+        }
+
+        let html = `<div class="query-results-header">Found ${data.results.length} results for "<strong>${esc(query)}</strong>" (searched ${data.num_searched} chunks)</div>`;
+        data.results.forEach(r => {
+          html += `
+            <div class="query-result-item">
+              <div class="query-result-rank">#${r.rank}</div>
+              <div class="query-result-body">
+                <div class="query-result-text">${esc(r.text)}</div>
+                <div class="query-result-meta">
+                  <span class="query-result-ts">${esc(r.timestamp)}</span>
+                  <span class="query-result-score">Score: ${r.score}</span>
+                  <span class="query-result-source">${r.source}</span>
+                </div>
+              </div>
+            </div>`;
+        });
+        resultsEl.innerHTML = html;
+      } catch (err) {
+        resultsEl.innerHTML = `<div class="query-empty">Error: ${esc(err.message)}</div>`;
+      }
+    }
+
+    document.getElementById("queryInput").addEventListener("keydown", e => { if (e.key === "Enter") doQuery(); });
+
+    // ── Metrics Dashboard ────────────────────────────────────────────────
+    function updateMetricsDashboard(metrics) {
+      const el = document.getElementById("metricsDashboard");
+      if (!metrics || !Object.keys(metrics).length) {
+        el.innerHTML = '<div class="metrics-empty">Metrics will appear after summarization</div>';
+        return;
+      }
+
+      let html = '<div class="metrics-grid-lg">';
+      Object.entries(metrics).forEach(([key, val]) => {
+        if (val == null || key === "type") return;
+        let displayVal = val;
+        let color = "var(--blue)";
+        if (typeof val === "number") {
+          if (key.includes("ratio") || key.includes("coverage") || key.includes("diversity")) {
+            displayVal = (val * 100).toFixed(1) + "%";
+          } else {
+            displayVal = val.toFixed ? val.toFixed(4) : val;
+          }
+          if (key.includes("r2") || key.includes("coverage")) color = "var(--green)";
+          if (key.includes("loss") || key.includes("mse")) color = "var(--yellow)";
+        }
+        const label = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+        html += `<div class="metric-card"><div class="metric-card-val" style="color:${color}">${displayVal}</div><div class="metric-card-label">${label}</div></div>`;
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    }
+
+    // ── Drag & drop ──────────────────────────────────────────────────────
     document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
     document.addEventListener("dragleave", e => { if (e.relatedTarget === null) document.body.classList.remove("dragging"); });
     document.addEventListener("drop", e => {
@@ -381,14 +545,11 @@
       if (f) {
         const ext = f.name.toLowerCase().split('.').pop();
         if (["mp4","pdf"].includes(ext)) {
-          // Trigger the same flow as file input
           const dt = new DataTransfer();
           dt.items.add(f);
           document.getElementById("videoInput").files = dt.files;
           document.getElementById("videoInput").dispatchEvent(new Event("change"));
-        } else {
-          showToast("Only .mp4 or .pdf files");
-        }
+        } else showToast("Only .mp4 or .pdf files");
       }
     });
 
